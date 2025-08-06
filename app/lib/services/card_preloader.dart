@@ -6,62 +6,104 @@ class CardPreloader {
   factory CardPreloader() => _instance;
   CardPreloader._internal();
 
-  List<InsightCard>? _preloadedCards;
-  bool _isLoading = false;
+  List<InsightCard> _allCards = [];
+  bool _isLoadingBatch = false;
   String? _errorMessage;
+  int _currentBatch = 0;
+  static const int _batchSize = 8;
+  bool _hasMoreCards = true;
 
   // Getters for the cards screen to use
-  List<InsightCard>? get preloadedCards => _preloadedCards;
-  bool get isLoading => _isLoading;
+  List<InsightCard> get allCards => List.unmodifiable(_allCards);
+  bool get isLoadingBatch => _isLoadingBatch;
   String? get errorMessage => _errorMessage;
-  bool get hasPreloadedCards => _preloadedCards != null && _preloadedCards!.isNotEmpty;
+  bool get hasCards => _allCards.isNotEmpty;
+  bool get hasMoreCards => _hasMoreCards;
+  int get totalCards => _allCards.length;
 
-  // Start preloading cards in the background
+  // Start preloading initial batch of cards
   Future<void> preloadCards() async {
     // Don't preload if already loading or already have cards
-    if (_isLoading || hasPreloadedCards) return;
+    if (_isLoadingBatch || hasCards) return;
 
-    _isLoading = true;
+    await _loadNextBatch();
+  }
+
+  // Load the next batch of cards in background
+  Future<void> loadNextBatch() async {
+    if (_isLoadingBatch || !_hasMoreCards) return;
+    await _loadNextBatch();
+  }
+
+  // Internal method to load a batch of cards
+  Future<void> _loadNextBatch() async {
+    _isLoadingBatch = true;
     _errorMessage = null;
 
     try {
       final firebaseService = FirebaseService();
       final result = await firebaseService.generateRecommendations(
-        count: 8,
+        count: _batchSize,
       );
 
       if (result['success']) {
         final List<dynamic> suggestions = result['suggestions'] ?? [];
         
         if (suggestions.isNotEmpty) {
-          _preloadedCards = suggestions
+          final newCards = suggestions
               .map((suggestion) => InsightCard.fromRecommendation(suggestion))
               .toList();
-          print('Cards preloaded successfully: ${_preloadedCards!.length} cards');
+          
+          _allCards.addAll(newCards);
+          _currentBatch++;
+          
+          // If we got fewer cards than requested, we might have reached the end
+          if (suggestions.length < _batchSize) {
+            _hasMoreCards = false;
+          }
+          
+          print('Batch ${_currentBatch} loaded: ${newCards.length} cards (Total: ${_allCards.length})');
         } else {
-          _errorMessage = 'Add some facts about your partner to get personalized recommendations!';
+          if (_allCards.isEmpty) {
+            _errorMessage = 'Add some facts about your partner to get personalized recommendations!';
+          }
+          _hasMoreCards = false;
         }
       } else {
-        _errorMessage = result['message'] ?? result['error'] ?? 'Failed to load recommendations';
+        if (_allCards.isEmpty) {
+          _errorMessage = result['message'] ?? result['error'] ?? 'Failed to load recommendations';
+        }
+        _hasMoreCards = false;
       }
     } catch (e) {
-      _errorMessage = 'Connection error. Please check your internet connection.';
-      print('Error preloading cards: $e');
+      if (_allCards.isEmpty) {
+        _errorMessage = 'Connection error. Please check your internet connection.';
+      }
+      print('Error loading batch: $e');
     } finally {
-      _isLoading = false;
+      _isLoadingBatch = false;
     }
   }
 
-  // Clear preloaded cards (useful for refresh)
-  void clearPreloadedCards() {
-    _preloadedCards = null;
+  // Clear all cards (useful for refresh)
+  void clearAllCards() {
+    _allCards.clear();
     _errorMessage = null;
-    _isLoading = false;
+    _isLoadingBatch = false;
+    _currentBatch = 0;
+    _hasMoreCards = true;
   }
 
-  // Force reload cards
+  // Force reload cards from beginning
   Future<void> reloadCards() async {
-    clearPreloadedCards();
+    clearAllCards();
     await preloadCards();
+  }
+
+  // Check if we should preload next batch based on current position
+  bool shouldPreloadNext(int currentIndex) {
+    // Start preloading when user is 2 cards away from the end of current batch
+    final remainingCards = _allCards.length - currentIndex - 1;
+    return remainingCards <= 2 && _hasMoreCards && !_isLoadingBatch;
   }
 }

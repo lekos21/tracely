@@ -558,6 +558,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     shape: BoxShape.circle,
                                   ),
                                 ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Capture life\'s moments',
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
                                 Container(
                                   width: 8,
                                   height: 8,

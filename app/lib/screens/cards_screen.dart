@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/firebase_service.dart';
 import '../services/card_preloader.dart';
 import '../widgets/insight_card.dart';
 import '../widgets/draggable_card.dart';
@@ -20,6 +19,7 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
   late AnimationController _loadingAnimationController;
   late AnimationController _textAnimationController;
   int _currentPhraseIndex = 0;
+  final CardPreloader _cardPreloader = CardPreloader();
   
   final List<String> _loadingPhrases = [
     "Crafting personalized suggestions...",
@@ -47,6 +47,9 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
     // Start phrase cycling
     _startPhraseAnimation();
     _loadRecommendations();
+    
+    // Listen for page changes to trigger background loading
+    _pageController.addListener(_onPageChanged);
   }
   
   void _startPhraseAnimation() {
@@ -66,8 +69,36 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
     });
   }
 
+  void _onPageChanged() {
+    if (!_pageController.hasClients) return;
+    
+    final newIndex = _pageController.page?.round() ?? 0;
+    if (newIndex != _currentIndex) {
+      setState(() {
+        _currentIndex = newIndex;
+      });
+      
+      // Check if we should preload next batch
+      if (_cardPreloader.shouldPreloadNext(_currentIndex)) {
+        _loadNextBatchInBackground();
+      }
+    }
+  }
+  
+  void _loadNextBatchInBackground() async {
+    await _cardPreloader.loadNextBatch();
+    
+    // Update UI with new cards if any were loaded
+    if (mounted && _cardPreloader.allCards.length > _cards.length) {
+      setState(() {
+        _cards = _cardPreloader.allCards;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _pageController.removeListener(_onPageChanged);
     _pageController.dispose();
     _loadingAnimationController.dispose();
     _textAnimationController.dispose();
@@ -297,31 +328,8 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                                 ],
                               ),
                             )
-                          : Column(
+                           : Column(
                               children: [
-                                // Card indicator
-                                if (_cards.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 16, bottom: 8),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: List.generate(
-                                        _cards.length,
-                                        (index) => Container(
-                                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                                          width: 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: index == _currentIndex
-                                                ? const Color(0xFFF472B6)
-                                                : Colors.grey[300],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                
                                 // Vertical PageView
                                 Expanded(
                                   child: PageView.builder(
@@ -390,23 +398,21 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
   }
 
   Future<void> _loadRecommendations() async {
-    // Check if we have preloaded cards first
-    final cardPreloader = CardPreloader();
-    
-    if (cardPreloader.hasPreloadedCards) {
-      // Use preloaded cards for instant loading
+    // Check if we have cards already loaded
+    if (_cardPreloader.hasCards) {
+      // Use existing cards for instant loading
       setState(() {
-        _cards = cardPreloader.preloadedCards!;
+        _cards = _cardPreloader.allCards;
         _isLoading = false;
         _errorMessage = null;
       });
       
-      debugPrint('Using preloaded cards: ${_cards.length} cards');
+      debugPrint('Using existing cards: ${_cards.length} cards');
       return;
     }
     
     // If preloader is still loading, show loading state but don't start new request
-    if (cardPreloader.isLoading) {
+    if (_cardPreloader.isLoadingBatch) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
@@ -420,59 +426,36 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
     }
     
     // If preloader has an error, show it
-    if (cardPreloader.errorMessage != null) {
+    if (_cardPreloader.errorMessage != null) {
       setState(() {
         _isLoading = false;
-        _errorMessage = cardPreloader.errorMessage;
+        _errorMessage = _cardPreloader.errorMessage;
       });
       return;
     }
     
-    // Fallback: Load cards directly (shouldn't happen often with preloading)
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-    
-    try {
-      final firebaseService = FirebaseService();
-      final result = await firebaseService.generateRecommendations(
-        count: 8,
-      );
+    // If no cards and not loading, trigger initial load
+    if (!_cardPreloader.hasCards && !_cardPreloader.isLoadingBatch) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
       
-      if (result['success']) {
-        // Fix type casting issue for mobile
-        final suggestionsRaw = result['suggestions'] ?? [];
-        final suggestions = (suggestionsRaw as List).map((suggestion) => 
-          Map<String, dynamic>.from(suggestion as Map)
-        ).toList();
-        
-        if (suggestions.isEmpty) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'Add some facts about your partner to get personalized recommendations!';
-          });
-          return;
-        }
-        
+      await _cardPreloader.preloadCards();
+      
+      // Check result after loading
+      if (_cardPreloader.hasCards) {
         setState(() {
-          _cards = suggestions
-              .map((suggestion) => InsightCard.fromRecommendation(suggestion))
-              .toList();
+          _cards = _cardPreloader.allCards;
           _isLoading = false;
+          _errorMessage = null;
         });
       } else {
         setState(() {
           _isLoading = false;
-          _errorMessage = result['message'] ?? result['error'] ?? 'Failed to load recommendations';
+          _errorMessage = _cardPreloader.errorMessage ?? 'Failed to load cards';
         });
       }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Error: $e'; // Show actual error instead of generic message
-      });
-      debugPrint('Error loading recommendations: $e');
     }
   }
 }

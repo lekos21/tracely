@@ -294,16 +294,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _signInWithGoogle,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4285F4),
-                                foregroundColor: Colors.white,
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF374151), // dark gray text
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 18,
                                   horizontal: 24,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(
+                                    color: Colors.grey.shade300,
+                                    width: 1.5,
+                                  ),
                                 ),
-                                elevation: 0,
+                                elevation: 2,
+                                shadowColor: Colors.black.withOpacity(0.1),
                               ),
                               child: _isLoading
                                   ? const SizedBox(
@@ -323,11 +328,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           height: 24,
                                         ),
                                         const SizedBox(width: 12),
-                                        Text(
+                                        const Text(
                                           'Continua con Google',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
+                                            color: Color(0xFF374151), // dark gray
                                           ),
                                         ),
                                       ],
