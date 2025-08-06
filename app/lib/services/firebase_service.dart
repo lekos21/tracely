@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -15,6 +16,29 @@ class FirebaseService {
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
+
+  // Simple test function to debug connectivity
+  Future<Map<String, dynamic>> testFirebaseConnection() async {
+    try {
+      print('DEBUG: Testing connection with test_function');
+      final callable = _functions.httpsCallable('test_function');
+      final result = await callable.call({});
+      
+      print('DEBUG: test_function response: ${result.data}');
+      return {
+        'success': true,
+        'message': 'Connection test successful',
+        'data': result.data,
+      };
+    } catch (e) {
+      print('ERROR: test_function failed with: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+        'message': 'Connection test failed',
+      };
+    }
+  }
 
   /// Chat and AI Functions
   /// Equivalent to your FastAPI endpoints for chat
@@ -57,12 +81,61 @@ class FirebaseService {
     );
   }
 
+  /// New Chat Agent Functions
+  /// Conversational chat with session persistence
+  
+  Future<Map<String, dynamic>> sendChatAgentMessage(String message) async {
+    try {
+      final callable = _functions.httpsCallable('send_chat_message');
+      final result = await callable.call({
+        'message': message,
+      });
+      
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+        'response': 'Errore di connessione. Riprova.',
+      };
+    }
+  }
+  
+  Future<Map<String, dynamic>> getChatHistory() async {
+    try {
+      final callable = _functions.httpsCallable('get_chat_history');
+      final result = await callable.call({});
+      
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+        'messages': [],
+      };
+    }
+  }
+  
+  Future<Map<String, dynamic>> clearChatSession() async {
+    try {
+      final callable = _functions.httpsCallable('clear_chat_session');
+      final result = await callable.call({});
+      
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   /// Cards Functions
   /// Generate swipeable cards with AI insights
   
   Future<List<Map<String, dynamic>>> generateCards({
     String cardType = 'mixed', // 'mixed', 'gifts', 'dates', 'insights'
-    int count = 5,
+    int count = 8,
   }) async {
     try {
       final callable = _functions.httpsCallable('generate_random_cards');
@@ -113,15 +186,38 @@ class FirebaseService {
     int count = 5,
   }) async {
     try {
+      // Wait for authentication to be ready
+      if (_auth.currentUser == null) {
+        print('ERROR: No authenticated user for generateRecommendations');
+        return {
+          'success': false,
+          'error': 'Authentication required',
+          'suggestions': [],
+        };
+      }
+      
+      print('DEBUG: Calling generate_recommendations with tags: $tags, count: $count, user: ${_auth.currentUser?.uid}');
       final callable = _functions.httpsCallable('generate_recommendations');
       final result = await callable.call({
         'tags': tags,
         'count': count,
       });
       
-      return Map<String, dynamic>.from(result.data);
+      print('DEBUG: generate_recommendations response: ${result.data}');
+      // Handle response format consistently like process_chat_message
+      final backendResponse = result.data['result'] ?? result.data;
+      // Fix type casting issue for mobile
+      return Map<String, dynamic>.from(backendResponse as Map);
     } catch (e) {
-      print('Error generating recommendations: $e');
+      print('ERROR: generateRecommendations failed with: $e');
+      print('ERROR: Exception type: ${e.runtimeType}');
+      if (e.toString().contains('UNAUTHENTICATED')) {
+        print('ERROR: Authentication issue detected');
+      } else if (e.toString().contains('NOT_FOUND')) {
+        print('ERROR: Function not found - check deployment');
+      } else if (e.toString().contains('CORS')) {
+        print('ERROR: CORS issue detected');
+      }
       return {
         'success': false,
         'error': e.toString(),
@@ -155,15 +251,38 @@ class FirebaseService {
     int limit = 50,
   }) async {
     try {
+      // Wait for authentication to be ready
+      if (_auth.currentUser == null) {
+        print('ERROR: No authenticated user for getUserFacts');
+        return {
+          'success': false,
+          'error': 'Authentication required',
+          'facts': [],
+        };
+      }
+      
+      print('DEBUG: Calling get_user_facts with tag: $tag, limit: $limit, user: ${_auth.currentUser?.uid}');
       final callable = _functions.httpsCallable('get_user_facts');
       final result = await callable.call({
         'tag': tag,
         'limit': limit,
       });
       
-      return Map<String, dynamic>.from(result.data);
+      print('DEBUG: get_user_facts response: ${result.data}');
+      // Handle response format consistently like process_chat_message
+      final backendResponse = result.data['result'] ?? result.data;
+      // Fix type casting issue for mobile
+      return Map<String, dynamic>.from(backendResponse as Map);
     } catch (e) {
-      print('Error getting user facts: $e');
+      print('ERROR: getUserFacts failed with: $e');
+      print('ERROR: Exception type: ${e.runtimeType}');
+      if (e.toString().contains('UNAUTHENTICATED')) {
+        print('ERROR: Authentication issue detected');
+      } else if (e.toString().contains('NOT_FOUND')) {
+        print('ERROR: Function not found - check deployment');
+      } else if (e.toString().contains('CORS')) {
+        print('ERROR: CORS issue detected');
+      }
       return {
         'success': false,
         'error': e.toString(),
@@ -328,15 +447,28 @@ class FirebaseService {
   // Google Sign-In using Firebase Auth directly (like React)
   Future<User?> signInWithGoogle() async {
     try {
-      // Create a GoogleAuthProvider instance
-      GoogleAuthProvider googleProvider = GoogleAuthProvider();
+      // Initialize GoogleSignIn
+      final GoogleSignIn googleSignIn = GoogleSignIn();
       
-      // Add scopes if needed
-      googleProvider.addScope('email');
-      googleProvider.addScope('profile');
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       
-      // Sign in with popup (web) or redirect
-      final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
+      // If the user cancels the sign-in process
+      if (googleUser == null) {
+        return null;
+      }
+      
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      
+      // Sign in to Firebase with the Google credential
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
       
       // Always ensure user profile exists (for both new and existing users)
       if (userCredential.user != null) {

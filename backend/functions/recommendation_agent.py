@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -30,11 +30,11 @@ class RecommendationAgent:
     def __init__(self):
         self.fact_processor = FactProcessor()
         
-        # Initialize OpenAI with GPT-4o-mini
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.7,  # Higher temperature for more creative suggestions
-            openai_api_key=os.getenv("OPENAI_API_KEY")
+        # Initialize Anthropic with Claude Sonnet
+        self.llm = ChatAnthropic(
+            model="claude-sonnet-4-20250514",
+            temperature=0.8,  # Higher temperature for more creative suggestions
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
         )
         
         # Initialize Pydantic output parser
@@ -77,7 +77,7 @@ class RecommendationAgent:
         
         return "\n".join(formatted_facts) if formatted_facts else "Nessun fatto disponibile per i tag selezionati."
 
-    def generate_recommendations(self, user_id: str, selected_tags: Optional[List[str]] = None, count: int = 5) -> Dict[str, Any]:
+    def generate_recommendations(self, user_id: str, selected_tags: Optional[List[str]] = None, count: int = 8) -> Dict[str, Any]:
         """
         Generate N personalized recommendations based on user facts and selected tags
         
@@ -121,42 +121,58 @@ class RecommendationAgent:
             
             # Create system prompt for recommendation generation
             system_prompt = f"""
-Sei un assistente AI specializzato nel generare suggerimenti personalizzati per relazioni romantiche.
-Il tuo compito è creare {count} suggerimenti creativi e actionable basati sui fatti forniti dall'utente.
+Sei un assistente AI creativo e intuitivo, specializzato nel trasformare piccoli dettagli in gesti d'amore memorabili.
+Il tuo superpotere è leggere tra le righe dei fatti e immaginare modi sorprendenti per far sentire speciale la persona amata.
 
-TAG DISPONIBILI:
-- people: famiglia, amici, colleghi
-- dislikes: cose che odia o da evitare  
-- gifts: tutto ciò che può diventare regalo
-- activities: hobby, interessi, cose che ama fare
-- dates: posti dove andare, esperienze insieme
-- food: gusti alimentari, ristoranti, cucina
-- history: background, studi, passato
+Crea {count} suggerimenti o reminder che vanno oltre l'ovvio - pensa come un detective dell'amore che scopre opportunità nascoste!
 
-REGOLE PER I SUGGERIMENTI:
-1. Ogni suggerimento deve essere una frase breve e actionable (massimo 200 caratteri)
-2. Deve essere basato sui fatti forniti e rilevante per i tag selezionati
-3. Deve essere pratico e realizzabile
-4. Evita suggerimenti generici - sii specifico basandoti sui fatti
-5. Considera sia gli aspetti positivi che quelli da evitare (dislikes)
-6. Assegna massimo 3 tag per suggerimento, scegliendo i più rilevanti
+TAG DISPONIBILI (pensa a questi come ingredienti per la magia):
+- people: il suo mondo sociale - famiglia, amici, colleghi che contano
+- dislikes: cose da evitare
+- gifts: tesori che potrebbero farla sorridere o commuovere
+- activities: passioni, hobby
+- dates: avventure insieme - luoghi, esperienze, momenti da creare
+- food: tutto ciò che riguarda il cibo
+- history: il suo passato
+- general: idee generali
 
-ESEMPI DI BUONI SUGGERIMENTI:
-- "Organizza una serata film Studio Ghibli con popcorn fatto in casa" (tags: ["activities", "food"])
-- "Evita di arrivare in ritardo al vostro prossimo appuntamento" (tags: ["dislikes", "dates"])
-- "Regalale un libro di cucina giapponese per il suo compleanno" (tags: ["gifts", "food"])
+
+LA TUA MISSIONE CREATIVA:
+1. Ogni suggerimento deve essere un piccolo capolavoro di premura (max 200 caratteri)
+2. Scava nei dettagli nascosti - cosa rivela davvero questo fatto su di lei?
+3. Pensa a gesti che la sorprenderebbero perché mostri di aver davvero ascoltato
+4. Combina elementi inaspettati - mescola i tag in modi creativi!
+5. Trasforma i DISLIKES in azioni POSITIVE che prevengono il problema
+6. Assegna max 3 tag, scegliendo quelli che catturano l'essenza del gesto
+
+ESEMPI:
+- "Crea una playlist delle sue canzoni preferite per quando è stressata dal lavoro" (tags: ["activities", "people"])
+- "Porta sempre con te delle mentine, dato che odia l'alito cattivo" (tags: ["dislikes", "gifts"])
+- "Organizza una cena a tema del suo paese d'origine con i suoi genitori" (tags: ["food", "people", "history"])
+
+Non limitarti solo ai fatti inseriti! Usa questi come ISPIRAZIONE per:
+- Categorie simili (ama Studio Ghibli → potrebbe amare anime, Giappone, arte)  
+- Pattern nascosti (3 fatti su cucina → probabilmente ama cucinare insieme)
+- Connessioni creative (studia architettura + ama disegnare → museo design)
+
+REGOLA D'ORO: Per ogni suggerimento "diretto" dai fatti, crea un suggerimento "creativo" che esce un po' dal seminato.
+
+Ricorda di essere anche realistico, non mischiare troppe cose tutte insieme altrimenti diventa difficile fare tutto, alterna cose più impegnative a cose più semplici ma rimanendo ragionevole.
 
 {self.output_parser.get_format_instructions()}
 """
             
             # Create user message with facts
             user_message = f"""
-FATTI SULLA PARTNER (organizzati per tag):
+🔍 CONTESTO E IDEE GENERALI:
 {formatted_facts}
 
-TAG SELEZIONATI: {', '.join(selected_tags)}
+✨ FOCUS: {', '.join(selected_tags)}
 
-Genera {count} suggerimenti personalizzati basati su questi fatti, concentrandoti sui tag selezionati.
+Ora è il momento di brillare! Analizza questi indizi come un detective dell'amore e crea {count} suggerimenti che la faranno sentire davvero vista e amata. 
+Pensa a gesti che nessun altro farebbe perché solo tu conosci questi dettagli su di lei.
+
+Sii creativo, sii specifico, sii magico! 💫
 """
             
             # Create messages for the LLM
@@ -165,7 +181,7 @@ Genera {count} suggerimenti personalizzati basati su questi fatti, concentrandot
                 HumanMessage(content=user_message)
             ]
             
-            # Get response from GPT-4o-mini
+            # Get response from Claude Sonnet
             response = self.llm(messages)
             response_text = response.content.strip()
             

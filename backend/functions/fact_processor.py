@@ -27,11 +27,13 @@ class FactProcessor:
     def __init__(self):
         self.db = firestore.client()
         
-        # Initialize OpenAI with GPT-4.1 nano
+        # Initialize OpenAI with GPT-4.1 nano - optimized for latency
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",  # GPT-4.1 nano equivalent
+            model="gpt-4o",  # GPT-4.1 nano equivalent
             temperature=0.3,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            max_tokens=200,  # Limit response length for faster processing
+            timeout=15  # 10 second timeout to prevent hanging
         )
         
         # Initialize Pydantic output parser
@@ -46,6 +48,7 @@ class FactProcessor:
             "dates",       # posti dove andare, esperienze insieme
             "food",        # gusti alimentari, ristoranti, cucina
             "history"      # background, studi, passato
+            "general"      # idee generali
         ]
         
         # Italian system prompt for fact extraction
@@ -57,10 +60,11 @@ TAG DISPONIBILI (massimo 3 per fact):
 - people: famiglia, amici, colleghi
 - dislikes: cose che odia o da evitare
 - gifts: tutto ciò che può diventare regalo
-- activities: hobby, interessi, cose che ama fare
+- activities: hobby, interessi, cose da fare
 - dates: posti dove andare, esperienze insieme
 - food: gusti alimentari, ristoranti, cucina
 - history: background, studi, passato
+- general: idee generali
 
 REGOLE:
 - Estrai il fatto in forma chiara e concisa
@@ -69,10 +73,10 @@ REGOLE:
 - Se l'input non contiene informazioni utili sulla partner, rispondi con "SKIP"
 
 ESEMPI:
-Input: "Odia quando sono in ritardo"
-Fact: "Odia quando sono in ritardo"
-Tags: ["dislikes"]
-Sentiment: "negative"
+Input: "Appuntamento creare una tierlist insieme"
+Fact: "Creare una tierlist insieme"
+Tags: ["dates", "activities"]
+Sentiment: "neutral"
 
 Input: "Ama i film di Studio Ghibli"
 Fact: "Ama i film di Studio Ghibli"
@@ -89,7 +93,7 @@ Sentiment: "negative"
 
     def process_input_to_fact(self, user_input: str, user_id: str) -> Optional[Dict[str, Any]]:
         """
-        Process user input and convert it to a structured fact using LangChain + GPT-4.1 nano
+        Optimized AI processing: convert user input to structured fact
         
         Args:
             user_input: Raw input from user
@@ -99,21 +103,20 @@ Sentiment: "negative"
             Structured fact dict or None if input is not useful
         """
         try:
-            # Create messages for the LLM
-            messages = [
-                SystemMessage(content=self.fact_extraction_prompt),
-                HumanMessage(content=f"Input da analizzare: {user_input}")
-            ]
+            # Optimized: Use single message instead of system + human for faster processing
+            prompt = f"""{self.fact_extraction_prompt}
+
+Input da analizzare: {user_input}"""
             
-            # Get response from GPT-4.1 nano
-            response = self.llm(messages)
+            # Get response from GPT-4.1 nano with optimized call
+            response = self.llm.invoke([HumanMessage(content=prompt)])
             response_text = response.content.strip()
             
-            # Handle SKIP response
+            # Quick check for SKIP response
             if "SKIP" in response_text.upper():
                 return None
                 
-            # Parse structured response using Pydantic
+            # Optimized parsing: try Pydantic first, fallback to manual parsing
             try:
                 fact_model = self.output_parser.parse(response_text)
                 
@@ -137,32 +140,40 @@ Sentiment: "negative"
 
     def save_fact_to_firestore(self, fact_data: Dict[str, Any], user_id: str) -> bool:
         """
-        Save a structured fact to Firestore
+        Optimized Firestore save operation
         
         Args:
-            fact_data: Structured fact dictionary
+            fact_data: Processed fact dictionary
             user_id: User ID
             
         Returns:
             True if saved successfully, False otherwise
         """
         try:
-            # Reference to user's facts collection
-            facts_ref = self.db.collection('users').document(user_id).collection('facts')
+            # Optimized: Prepare minimal document structure
+            fact_doc = {
+                "fact": fact_data["fact"],
+                "tags": fact_data["tags"],
+                "sentiment": fact_data["sentiment"],
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "date": fact_data["date"]
+            }
             
-            # Add the fact
-            doc_ref = facts_ref.add(fact_data)
+            # Optimized: Use batch write for better performance (even for single doc)
+            batch = self.db.batch()
+            fact_ref = self.db.collection('users').document(user_id).collection('facts').document()
+            batch.set(fact_ref, fact_doc)
+            batch.commit()
             
-            print(f"Fact saved successfully with ID: {doc_ref[1].id}")
             return True
-            
+
         except Exception as e:
             print(f"Error saving fact to Firestore: {e}")
             return False
 
-    def process_and_save_fact(self, user_input: str, user_id: str) -> Dict[str, Any]:
+    def upload_fact(self, user_input: str, user_id: str) -> Dict[str, Any]:
         """
-        Complete pipeline: process input with AI and save to Firestore
+        Optimized pipeline: process input with AI and save to Firestore
         
         Args:
             user_input: Raw input from user

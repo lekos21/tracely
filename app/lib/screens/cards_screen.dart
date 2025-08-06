@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import '../services/card_preloader.dart';
+import '../widgets/insight_card.dart';
+import '../widgets/draggable_card.dart';
 
 class CardsScreen extends StatefulWidget {
   const CardsScreen({super.key});
@@ -12,306 +15,420 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
   List<InsightCard> _cards = [];
   bool _isLoading = true;
   String? _errorMessage;
-
   int _currentIndex = 0;
-  late AnimationController _animationController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _rotationAnimation;
+  late PageController _pageController;
+  late AnimationController _loadingAnimationController;
+  late AnimationController _textAnimationController;
+  int _currentPhraseIndex = 0;
   
-  Offset _dragOffset = Offset.zero;
-  bool _isDragging = false;
+  final List<String> _loadingPhrases = [
+    "Crafting personalized suggestions...",
+    "Finding the perfect ideas for you...",
+    "Discovering unique experiences...",
+    "Almost ready!"
+  ];
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+    _pageController = PageController();
+    
+    // Initialize animation controllers
+    _loadingAnimationController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+    
+    _textAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(2.0, 0.0),
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.8,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-    _rotationAnimation = Tween<double>(
-      begin: 0.0,
-      end: 0.3,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
     
-    // Load AI-generated recommendations on startup
+    // Start phrase cycling
+    _startPhraseAnimation();
     _loadRecommendations();
+  }
+  
+  void _startPhraseAnimation() {
+    _textAnimationController.forward().then((_) {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted && _isLoading) {
+          _textAnimationController.reverse().then((_) {
+            if (mounted && _isLoading) {
+              setState(() {
+                _currentPhraseIndex = (_currentPhraseIndex + 1) % _loadingPhrases.length;
+              });
+              _startPhraseAnimation();
+            }
+          });
+        }
+      });
+    });
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _pageController.dispose();
+    _loadingAnimationController.dispose();
+    _textAnimationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Cards',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFF7ED), // orange-50
+              Color(0xFFFDF2F8), // pink-50  
+              Color(0xFFFEF3E2), // peach-100
+            ],
           ),
         ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        actions: [
-          IconButton(
-            onPressed: _refreshCards,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Cards',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Generating personalized recommendations...',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
+        child: Stack(
+          children: [
+            // Floating decorative circles
+            Positioned(
+              top: 100,
+              right: -50,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF472B6).withValues(alpha: 0.1), // pink-400
+                ),
               ),
-            )
-          : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadRecommendations,
-                        child: const Text('Try Again'),
-                      ),
-                    ],
-                  ),
-                )
-              : _currentIndex >= _cards.length
-                  ? const Center(
+            ),
+            Positioned(
+              bottom: 200,
+              left: -30,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFB923C).withValues(alpha: 0.1), // orange-400
+                ),
+              ),
+            ),
+            
+            // Main content
+            SafeArea(
+              child: _isLoading
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.favorite,
-                            size: 64,
-                            color: Colors.grey,
+                          // Animated loading circles
+                          AnimatedBuilder(
+                            animation: _loadingAnimationController,
+                            builder: (context, child) {
+                              return Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // Outer rotating circle
+                                  Transform.rotate(
+                                    angle: _loadingAnimationController.value * 2 * 3.14159,
+                                    child: Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFFF472B6).withOpacity(0.3),
+                                          width: 3,
+                                        ),
+                                      ),
+                                      child: const Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(
+                                            Icons.favorite,
+                                            color: Color(0xFFF472B6),
+                                            size: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Inner pulsing circle
+                                  Transform.scale(
+                                    scale: 0.7 + (0.3 * (1 + (_loadingAnimationController.value * 2 - 1).abs()) / 2),
+                                    child: Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            const Color(0xFFF472B6).withOpacity(0.6),
+                                            const Color(0xFFFB923C).withOpacity(0.6),
+                                          ],
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.auto_awesome,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            'All cards reviewed!',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          const SizedBox(height: 32),
+                          // Animated text
+                          AnimatedBuilder(
+                            animation: _textAnimationController,
+                            builder: (context, child) {
+                              return Opacity(
+                                opacity: _textAnimationController.value,
+                                child: Transform.translate(
+                                  offset: Offset(0, 10 * (1 - _textAnimationController.value)),
+                                  child: Text(
+                                    _loadingPhrases[_currentPhraseIndex],
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Pull to refresh for new suggestions',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
-                            textAlign: TextAlign.center,
+                          const SizedBox(height: 16),
+                          // Progress dots
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(5, (index) {
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                width: index <= _currentPhraseIndex ? 8 : 6,
+                                height: index <= _currentPhraseIndex ? 8 : 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: index <= _currentPhraseIndex
+                                      ? const Color(0xFFF472B6)
+                                      : const Color(0xFFF472B6).withOpacity(0.3),
+                                ),
+                              );
+                            }),
                           ),
                         ],
                       ),
                     )
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text(
-                    'Drag cards left or right to review',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: Center(
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // Background cards (next cards) - only show if different from current
-                          for (int i = _currentIndex + 1; i < _currentIndex + 3 && i < _cards.length; i++)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: (i - _currentIndex) * 8.0, // Slight vertical offset
-                              child: Center(
-                                child: Transform.scale(
-                                  scale: 1.0 - (i - _currentIndex) * 0.05, // More noticeable scaling
-                                  child: Opacity(
-                                    opacity: 1.0 - (i - _currentIndex) * 0.3, // Fade background cards
-                                    child: DraggableCard(
-                                      card: _cards[i],
-                                      isInteractive: false,
-                                      isBackground: true,
-                                    ),
-                                  ),
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
                                 ),
                               ),
-                            ),
-                          // Current card (draggable) - always on top
-                          if (_currentIndex < _cards.length)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: 0,
-                              child: Center(
-                                child: GestureDetector(
-                                  onPanStart: (details) {
-                                    setState(() {
-                                      _isDragging = true;
-                                    });
-                                  },
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      _dragOffset += details.delta;
-                                    });
-                                  },
-                                  onPanEnd: (details) {
-                                    _handlePanEnd();
-                                  },
-                                  child: Transform.translate(
-                                    offset: _dragOffset,
-                                    child: Transform.rotate(
-                                      angle: _dragOffset.dx * 0.001, // Slight rotation during drag
-                                      child: DraggableCard(
-                                        card: _cards[_currentIndex],
-                                        isInteractive: true,
-                                        dragOffset: _dragOffset,
-                                        isBackground: false,
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadRecommendations,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFF472B6),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text('Try Again'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _cards.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.favorite_border,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No cards available',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Pull down to refresh',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                // Card indicator
+                                if (_cards.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16, bottom: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: List.generate(
+                                        _cards.length,
+                                        (index) => Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: index == _currentIndex
+                                                ? const Color(0xFFF472B6)
+                                                : Colors.grey[300],
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
+                                
+                                // Vertical PageView
+                                Expanded(
+                                  child: PageView.builder(
+                                    controller: _pageController,
+                                    scrollDirection: Axis.vertical,
+                                    onPageChanged: (index) {
+                                      setState(() {
+                                        _currentIndex = index;
+                                      });
+                                    },
+                                    itemCount: _cards.length,
+                                    itemBuilder: (context, index) {
+                                      return Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 32,
+                                            vertical: 16,
+                                          ),
+                                          child: DraggableCard(
+                                            card: _cards[index],
+                                            isInteractive: false,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                              ),
+                                
+                                // Navigation hint
+                                if (_cards.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Column(
+                                      children: [
+                                        if (_currentIndex < _cards.length - 1)
+                                          Icon(
+                                            Icons.keyboard_arrow_down,
+                                            color: Colors.grey[400],
+                                            size: 24,
+                                          ),
+                                        Text(
+                                          _currentIndex < _cards.length - 1
+                                              ? 'Swipe up for next card'
+                                              : 'End of cards',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                        if (_currentIndex > 0)
+                                          Icon(
+                                            Icons.keyboard_arrow_up,
+                                            color: Colors.grey[400],
+                                            size: 24,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Action buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      FloatingActionButton(
-                        heroTag: 'reject',
-                        onPressed: () => _rejectCard(),
-                        backgroundColor: Colors.red,
-                        child: const Icon(Icons.close, color: Colors.white),
-                      ),
-                      FloatingActionButton(
-                        heroTag: 'accept',
-                        onPressed: () => _acceptCard(),
-                        backgroundColor: Colors.green,
-                        child: const Icon(Icons.favorite, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Progress indicator
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${_currentIndex + 1} / ${_cards.length}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade400,
-                        ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
             ),
+          ],
+        ),
+      ),
     );
   }
 
-  void _handlePanEnd() {
-    const threshold = 100.0;
+  Future<void> _loadRecommendations() async {
+    // Check if we have preloaded cards first
+    final cardPreloader = CardPreloader();
     
-    if (_dragOffset.dx.abs() > threshold) {
-      // Card was dragged far enough
-      if (_dragOffset.dx > 0) {
-        _acceptCard();
-      } else {
-        _rejectCard();
-      }
-    } else {
-      // Snap back to center
+    if (cardPreloader.hasPreloadedCards) {
+      // Use preloaded cards for instant loading
       setState(() {
-        _dragOffset = Offset.zero;
-        _isDragging = false;
+        _cards = cardPreloader.preloadedCards!;
+        _isLoading = false;
+        _errorMessage = null;
       });
+      
+      debugPrint('Using preloaded cards: ${_cards.length} cards');
+      return;
     }
-  }
-
-  void _acceptCard() {
-    print('Card accepted: ${_cards[_currentIndex].title}');
-    _nextCard();
-  }
-
-  void _rejectCard() {
-    print('Card rejected: ${_cards[_currentIndex].title}');
-    _nextCard();
-  }
-
-  void _nextCard() {
-    setState(() {
-      _currentIndex++;
-      _dragOffset = Offset.zero;
-      _isDragging = false;
-    });
-  }
-
-  void _loadRecommendations() async {
+    
+    // If preloader is still loading, show loading state but don't start new request
+    if (cardPreloader.isLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+      
+      // Wait for preloader to finish and try again
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _loadRecommendations();
+      });
+      return;
+    }
+    
+    // If preloader has an error, show it
+    if (cardPreloader.errorMessage != null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = cardPreloader.errorMessage;
+      });
+      return;
+    }
+    
+    // Fallback: Load cards directly (shouldn't happen often with preloading)
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -320,11 +437,15 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
     try {
       final firebaseService = FirebaseService();
       final result = await firebaseService.generateRecommendations(
-        count: 5,
+        count: 8,
       );
       
       if (result['success']) {
-        final List<dynamic> suggestions = result['suggestions'] ?? [];
+        // Fix type casting issue for mobile
+        final suggestionsRaw = result['suggestions'] ?? [];
+        final suggestions = (suggestionsRaw as List).map((suggestion) => 
+          Map<String, dynamic>.from(suggestion as Map)
+        ).toList();
         
         if (suggestions.isEmpty) {
           setState(() {
@@ -338,7 +459,6 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
           _cards = suggestions
               .map((suggestion) => InsightCard.fromRecommendation(suggestion))
               .toList();
-          _currentIndex = 0;
           _isLoading = false;
         });
       } else {
@@ -350,265 +470,9 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Connection error. Please check your internet connection.';
+        _errorMessage = 'Error: $e'; // Show actual error instead of generic message
       });
-      print('Error loading recommendations: $e');
-    }
-  }
-  
-  void _refreshCards() async {
-    _loadRecommendations();
-  }
-}
-
-class DraggableCard extends StatelessWidget {
-  final InsightCard card;
-  final bool isInteractive;
-  final Offset dragOffset;
-  final bool isBackground;
-
-  const DraggableCard({
-    super.key,
-    required this.card,
-    this.isInteractive = true,
-    this.dragOffset = Offset.zero,
-    this.isBackground = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Calculate opacity based on drag distance for visual feedback
-    double opacity = 1.0;
-    Color? overlayColor;
-    
-    if (isInteractive && dragOffset.dx.abs() > 50) {
-      opacity = 0.8;
-      if (dragOffset.dx > 0) {
-        overlayColor = Colors.green.withOpacity(0.3);
-      } else {
-        overlayColor = Colors.red.withOpacity(0.3);
-      }
-    }
-
-    return Container(
-      width: 300,
-      constraints: const BoxConstraints(
-        minHeight: 300,
-        maxHeight: 400,
-      ),
-      decoration: BoxDecoration(
-        color: isBackground ? const Color(0xFFFAFAFA) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isBackground ? 0.05 : 0.1),
-            blurRadius: isBackground ? 5 : 10,
-            offset: Offset(0, isBackground ? 2 : 5),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Main card content
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: _getCardColor(card.type).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(40),
-                  ),
-                  child: Center(
-                    child: Text(
-                      card.icon,
-                      style: const TextStyle(fontSize: 40),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Title
-                Text(
-                  card.title,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: _getCardColor(card.type),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                // Content
-                Text(
-                  card.content,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                // Tag badges
-                if (card.tags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    alignment: WrapAlignment.center,
-                    children: card.tags.map((tag) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getTagColor(tag).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _getTagColor(tag).withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        tag,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _getTagColor(tag),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    )).toList(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          // Overlay for drag feedback
-          if (overlayColor != null)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: overlayColor,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Center(
-                  child: Icon(
-                    dragOffset.dx > 0 ? Icons.favorite : Icons.close,
-                    size: 60,
-                    color: dragOffset.dx > 0 ? Colors.green : Colors.red,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Color _getCardColor(String type) {
-    switch (type) {
-      case 'gift':
-        return Colors.purple;
-      case 'date':
-        return Colors.pink;
-      case 'insight':
-        return Colors.blue;
-      case 'activity':
-        return Colors.orange;
-      case 'food':
-        return Colors.green;
-      case 'people':
-        return Colors.indigo;
-      case 'warning':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getTagColor(String tag) {
-    switch (tag) {
-      case 'gifts':
-        return Colors.purple;
-      case 'dates':
-        return Colors.pink;
-      case 'activities':
-        return Colors.orange;
-      case 'food':
-        return Colors.green;
-      case 'people':
-        return Colors.indigo;
-      case 'dislikes':
-        return Colors.red;
-      case 'history':
-        return Colors.brown;
-      default:
-        return Colors.grey;
+      debugPrint('Error loading recommendations: $e');
     }
   }
 }
-
-class InsightCard {
-  final String type;
-  final String title;
-  final String content;
-  final String icon;
-  final List<String> tags;
-
-  InsightCard({
-    required this.type,
-    required this.title,
-    required this.content,
-    required this.icon,
-    this.tags = const [],
-  });
-
-  factory InsightCard.fromRecommendation(Map<String, dynamic> suggestion) {
-    final tags = List<String>.from(suggestion['tags'] ?? []);
-    return InsightCard(
-      type: _getTypeFromTags(tags),
-      title: _getTitleFromTags(tags),
-      content: suggestion['sentence'] ?? '',
-      icon: _getIconFromTags(tags),
-      tags: tags,
-    );
-  }
-
-  static String _getTypeFromTags(List<String> tags) {
-    if (tags.contains('gifts')) return 'gift';
-    if (tags.contains('dates')) return 'date';
-    if (tags.contains('activities')) return 'activity';
-    if (tags.contains('food')) return 'food';
-    if (tags.contains('people')) return 'people';
-    if (tags.contains('dislikes')) return 'warning';
-    return 'insight';
-  }
-
-  static String _getTitleFromTags(List<String> tags) {
-    if (tags.contains('gifts')) return 'Gift Idea';
-    if (tags.contains('dates')) return 'Date Suggestion';
-    if (tags.contains('activities')) return 'Activity Idea';
-    if (tags.contains('food')) return 'Food Suggestion';
-    if (tags.contains('people')) return 'People Insight';
-    if (tags.contains('dislikes')) return 'Important Note';
-    if (tags.contains('history')) return 'Background Info';
-    return 'Relationship Tip';
-  }
-
-  static String _getIconFromTags(List<String> tags) {
-    if (tags.contains('gifts')) return '🎁';
-    if (tags.contains('dates')) return '💕';
-    if (tags.contains('activities')) return '🎯';
-    if (tags.contains('food')) return '🍽️';
-    if (tags.contains('people')) return '👥';
-    if (tags.contains('dislikes')) return '⚠️';
-    if (tags.contains('history')) return '📚';
-    return '💡';
-  }
-}
-
-

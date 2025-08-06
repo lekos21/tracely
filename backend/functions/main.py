@@ -4,6 +4,7 @@ import json
 from fact_processor import FactProcessor
 from ai_service import AIService
 from recommendation_agent import RecommendationAgent
+from chat_agent import ChatAgent
 
 # Initialize Firebase Admin
 initialize_app()
@@ -12,6 +13,7 @@ initialize_app()
 fact_processor = None
 ai_service = None
 recommendation_agent = None
+chat_agent = None
 
 def get_fact_processor():
     global fact_processor
@@ -30,6 +32,12 @@ def get_recommendation_agent():
     if recommendation_agent is None:
         recommendation_agent = RecommendationAgent()
     return recommendation_agent
+
+def get_chat_agent():
+    global chat_agent
+    if chat_agent is None:
+        chat_agent = ChatAgent()
+    return chat_agent
 
 @https_fn.on_call(region="europe-west1")
 def test_function(req):
@@ -82,8 +90,8 @@ def process_chat_message(req):
             }
         
         if message_type == 'fact':
-            # Use AI to process and save the fact
-            result = get_fact_processor().process_and_save_fact(message, user_id)
+            # Use AI to process and save the fact (optimized)
+            result = get_fact_processor().upload_fact(message, user_id)
             return result
             
         elif message_type == 'query':
@@ -117,7 +125,9 @@ def get_user_facts(req):
         # Get authenticated user ID from Firebase Auth
         if req.auth and req.auth.uid:
             user_id = req.auth.uid
+            print(f"DEBUG: get_user_facts called for user_id: {user_id}")
         else:
+            print("DEBUG: get_user_facts - No authentication found")
             return {
                 'success': False,
                 'error': 'Authentication required',
@@ -125,12 +135,24 @@ def get_user_facts(req):
             }
             
         tag = req.data.get('tag', None)
-        limit = req.data.get('limit', 50)
+        limit_raw = req.data.get('limit', 50)
+        
+        # Handle protobuf Int64Value format from Firebase Callable
+        if isinstance(limit_raw, dict) and '@type' in limit_raw:
+            limit = int(limit_raw.get('value', 50))
+        else:
+            limit = int(limit_raw) if limit_raw else 50
+            
+        print(f"DEBUG: get_user_facts - tag: {tag}, limit: {limit} (raw: {limit_raw})")
         
         if tag:
             facts = get_fact_processor().get_user_facts_by_tag(user_id, tag, limit)
         else:
             facts = get_fact_processor().get_all_user_facts(user_id, limit)
+        
+        print(f"DEBUG: get_user_facts - Retrieved {len(facts)} facts")
+        if facts:
+            print(f"DEBUG: First fact sample: {facts[0] if facts else 'None'}")
         
         return {
             'success': True,
@@ -139,6 +161,8 @@ def get_user_facts(req):
         }
     except Exception as e:
         print(f"Error in get_user_facts: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return {
             'success': False,
             'error': str(e),
@@ -269,37 +293,48 @@ def get_user_facts_by_hierarchy(req):
 
 @https_fn.on_call(region="europe-west1")
 def generate_recommendations(req):
-    """Generate personalized recommendations based on user facts and selected tags"""
+    """Generate personalized recommendations based on user facts"""
     try:
         # Get authenticated user ID from Firebase Auth
         if req.auth and req.auth.uid:
             user_id = req.auth.uid
+            print(f"DEBUG: generate_recommendations called for user_id: {user_id}")
         else:
+            print("DEBUG: generate_recommendations - No authentication found")
             return {
                 'success': False,
                 'error': 'Authentication required',
                 'suggestions': []
             }
+            
+        selected_tags = req.data.get('selected_tags', None)
+        count_raw = req.data.get('count', 8)
         
-        # Get parameters from request
-        selected_tags = req.data.get('tags', None)  # List of tags to focus on (None = all tags)
-        count = req.data.get('count', 5)  # Number of suggestions to generate
+        # Handle protobuf Int64Value format from Firebase Callable
+        if isinstance(count_raw, dict) and '@type' in count_raw:
+            count = int(count_raw.get('value', 8))
+        else:
+            count = int(count_raw) if count_raw else 8
+            
+        print(f"DEBUG: generate_recommendations - selected_tags: {selected_tags}, count: {count} (raw: {count_raw})")
         
-        # Validate count
-        if count < 1 or count > 20:
-            count = 5
+        # Get facts organized by tags first to check if user has any facts
+        limit = 50  # Define limit variable that was missing
+        facts_hierarchy = get_fact_processor().get_all_user_facts_by_hierarchy(user_id, limit)
+        print(f"DEBUG: generate_recommendations - facts_hierarchy type: {type(facts_hierarchy)}")
         
-        # Generate recommendations using the agent
         result = get_recommendation_agent().generate_recommendations(
             user_id=user_id,
             selected_tags=selected_tags,
             count=count
         )
         
+        print(f"DEBUG: generate_recommendations - result success: {result.get('success', False)}")
         return result
-        
     except Exception as e:
         print(f"Error in generate_recommendations: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return {
             'success': False,
             'error': str(e),
@@ -504,4 +539,112 @@ def generate_random_cards(req):
             'success': False,
             'error': str(e),
             'cards': []
+        }
+
+@https_fn.on_call(region="europe-west1")
+def send_chat_message(req):
+    """Send a message to the chat agent and get a response"""
+    try:
+        # Get authenticated user ID from Firebase Auth
+        if req.auth and req.auth.uid:
+            user_id = req.auth.uid
+        else:
+            return {
+                'success': False,
+                'error': 'Authentication required'
+            }
+        
+        message = req.data.get('message', '')
+        
+        if not message.strip():
+            return {
+                'success': False,
+                'error': 'Message cannot be empty'
+            }
+        
+        # Get chat response
+        result = get_chat_agent().chat(user_id, message)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in send_chat_message: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@https_fn.on_call(region="europe-west1")
+def get_chat_history(req):
+    """Get the conversation history for the current user session"""
+    try:
+        # Get authenticated user ID from Firebase Auth
+        if req.auth and req.auth.uid:
+            user_id = req.auth.uid
+        else:
+            return {
+                'success': False,
+                'error': 'Authentication required'
+            }
+        
+        # Get conversation history
+        result = get_chat_agent().get_conversation_history(user_id)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in get_chat_history: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@https_fn.on_call(region="europe-west1")
+def clear_chat_session(req):
+    """Clear the chat session for the current user"""
+    try:
+        # Get authenticated user ID from Firebase Auth
+        if req.auth and req.auth.uid:
+            user_id = req.auth.uid
+        else:
+            return {
+                'success': False,
+                'error': 'Authentication required'
+            }
+        
+        # Clear conversation
+        result = get_chat_agent().clear_conversation(user_id)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in clear_chat_session: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+@https_fn.on_call(region="europe-west1")
+def get_chat_sessions_info(req):
+    """Get information about active chat sessions (admin function)"""
+    try:
+        # Get authenticated user ID from Firebase Auth
+        if req.auth and req.auth.uid:
+            user_id = req.auth.uid
+        else:
+            return {
+                'success': False,
+                'error': 'Authentication required'
+            }
+        
+        # Get active sessions info
+        result = get_chat_agent().get_active_sessions()
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in get_chat_sessions_info: {e}")
+        return {
+            'success': False,
+            'error': str(e)
         }

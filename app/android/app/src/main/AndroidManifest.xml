@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for network requests -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="rel_intel_app"
+        android:label="Tracely"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
