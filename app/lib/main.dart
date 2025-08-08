@@ -18,7 +18,7 @@ class TraceLyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TraceLy - Relationship Intelligence',
+      title: 'Tracely - Relationship Intelligence',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6B73FF), // Modern purple-blue

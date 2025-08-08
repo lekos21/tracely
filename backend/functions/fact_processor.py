@@ -27,9 +27,9 @@ class FactProcessor:
     def __init__(self):
         self.db = firestore.client()
         
-        # Initialize OpenAI with GPT-4.1 nano - optimized for latency
+        # Initialize OpenAI with GPT-5 nano - optimized for latency
         self.llm = ChatOpenAI(
-            model="gpt-4o",  # GPT-4.1 nano equivalent
+            model="gpt-5-nano",  
             temperature=0.3,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             max_tokens=200,  # Limit response length for faster processing
@@ -54,13 +54,13 @@ class FactProcessor:
         # Italian system prompt for fact extraction
         self.fact_extraction_prompt = f"""
 Sei un assistente AI specializzato nell'analizzare informazioni su relazioni romantiche.
-Il tuo compito è trasformare input dell'utente in "facts" strutturati.
+Il tuo compito è trasformare input dell'utente in "facts" strutturati. Questi input possono rappresentare un'idea romantica dell'utente, oppure una preferenza espressa dalla partner (e.g. "vorrei regalarle un ciondolo d'argento", "Le piace il cibo italiano").
 
 TAG DISPONIBILI (massimo 3 per fact):
 - people: famiglia, amici, colleghi
 - dislikes: cose che odia o da evitare
 - gifts: tutto ciò che può diventare regalo
-- activities: hobby, interessi, cose da fare
+- activities: esperienze, luoghi speciali, attività da fare
 - dates: posti dove andare, esperienze insieme
 - food: gusti alimentari, ristoranti, cucina
 - history: background, studi, passato
@@ -108,7 +108,7 @@ Sentiment: "negative"
 
 Input da analizzare: {user_input}"""
             
-            # Get response from GPT-4.1 nano with optimized call
+            # Get response from GPT-5 nano with optimized call
             response = self.llm.invoke([HumanMessage(content=prompt)])
             response_text = response.content.strip()
             

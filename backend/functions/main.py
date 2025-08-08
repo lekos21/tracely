@@ -625,6 +625,104 @@ def clear_chat_session(req):
         }
 
 @https_fn.on_call(region="europe-west1")
+def chat_with_context(req):
+    """Process chat message with conversation context (client-side persistence)"""
+    try:
+        # Get authenticated user ID from Firebase Auth
+        if req.auth and req.auth.uid:
+            user_id = req.auth.uid
+        else:
+            return {
+                'success': False,
+                'error': 'Authentication required'
+            }
+        
+        message = req.data.get('message', '')
+        conversation_history = req.data.get('conversation_history', [])
+        
+        if not message.strip():
+            return {
+                'success': False,
+                'error': 'Message cannot be empty'
+            }
+        
+        # Get facts for the user
+        fact_processor = get_fact_processor()
+        facts_by_tag = fact_processor.get_facts_summary_by_tags(user_id)
+        
+        # Format facts for prompt
+        formatted_facts = []
+        available_tags = ["people", "dislikes", "gifts", "activities", "dates", "food", "history"]
+        
+        for tag in available_tags:
+            if tag in facts_by_tag and facts_by_tag[tag]:
+                formatted_facts.append(f"\n## {tag.upper()}")
+                for fact in facts_by_tag[tag]:
+                    fact_content = fact.get('fact', '')
+                    sentiment = fact.get('sentiment', 'neutral')
+                    formatted_facts.append(f"- {fact_content} ({sentiment})")
+        
+        facts_text = "\n".join(formatted_facts) if formatted_facts else "Nessun fatto disponibile."
+        
+        # Create system prompt
+        system_prompt = f"""Sei un assistente AI conversazionale specializzato nelle relazioni romantiche. 
+Il tuo ruolo è aiutare l'utente a comprendere meglio la sua partner attraverso conversazioni naturali e coinvolgenti.
+
+INFORMAZIONI SULLA PARTNER E RIFLESSIONI GENERALI:
+{facts_text}
+
+LINEE GUIDA PER LA CONVERSAZIONE:
+1. Sii conversazionale, empatico e naturale
+2. Usa le informazioni sui fatti per dare consigli personalizzati e pertinenti
+3. Fai domande di approfondimento quando appropriato
+4. Mantieni un tono positivo e costruttivo
+5. Rispondi sempre in italiano
+6. Se non hai abbastanza informazioni, chiedi gentilmente più dettagli
+
+Ricorda: il tuo obiettivo è aiutare l'utente a costruire una relazione più forte e comprensiva con la sua partner."""
+        
+        # Prepare messages for LangChain
+        from langchain.schema import HumanMessage, SystemMessage, AIMessage
+        from langchain_anthropic import ChatAnthropic
+        import os
+        
+        # Initialize the LLM
+        llm = ChatAnthropic(
+            model="claude-sonnet-4-20250514",
+            temperature=0.7,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+        
+        # Build message history
+        messages = [SystemMessage(content=system_prompt)]
+        
+        # Add conversation history
+        for msg in conversation_history:
+            if msg.get('isUser'):
+                messages.append(HumanMessage(content=msg['text']))
+            else:
+                messages.append(AIMessage(content=msg['text']))
+        
+        # Add current message
+        messages.append(HumanMessage(content=message))
+        
+        # Get AI response
+        response = llm.invoke(messages)
+        
+        return {
+            'success': True,
+            'response': response.content
+        }
+        
+    except Exception as e:
+        print(f"Error in chat_with_context: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'response': 'Si è verificato un errore. Riprova.'
+        }
+
+@https_fn.on_call(region="europe-west1")
 def get_chat_sessions_info(req):
     """Get information about active chat sessions (admin function)"""
     try:

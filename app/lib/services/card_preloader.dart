@@ -102,8 +102,14 @@ class CardPreloader {
 
   // Check if we should preload next batch based on current position
   bool shouldPreloadNext(int currentIndex) {
-    // Start preloading when user is 2 cards away from the end of current batch
-    final remainingCards = _allCards.length - currentIndex - 1;
-    return remainingCards <= 2 && _hasMoreCards && !_isLoadingBatch;
+    // Start preloading when user reaches the 2nd card of the latest loaded batch
+    // Example: with batch size 8, trigger at indices 1, 9, 17, ... as you enter each new batch
+    if (!_hasMoreCards || _isLoadingBatch || _allCards.isEmpty) return false;
+    // Only trigger for the most recently loaded batch to avoid duplicate triggers when multiple batches exist
+    final latestBatchStart = (_currentBatch - 1) * _batchSize; // 0, 8, 16, ...
+    final isSecondOfLatestBatch = currentIndex == latestBatchStart + 1;
+    // Ensure we've fully loaded exactly _currentBatch batches (no partial overfetch beyond expected batch size)
+    final isAlignedWithBatches = _allCards.length >= _currentBatch * _batchSize || !_hasMoreCards;
+    return isSecondOfLatestBatch && isAlignedWithBatches;
   }
 }

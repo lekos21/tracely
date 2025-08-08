@@ -129,6 +129,29 @@ class FirebaseService {
       };
     }
   }
+  
+  /// New Client-Side Chat Function
+  /// Sends conversation history with each message for context
+  Future<Map<String, dynamic>> chatWithContext({
+    required String message,
+    required List<Map<String, dynamic>> conversationHistory,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('chat_with_context');
+      final result = await callable.call({
+        'message': message,
+        'conversation_history': conversationHistory,
+      });
+      
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+        'response': 'Errore di connessione. Riprova.',
+      };
+    }
+  }
 
   /// Cards Functions
   /// Generate swipeable cards with AI insights

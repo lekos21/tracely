@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/firebase_service.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -16,54 +18,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _loadChatHistory();
+    // No need to load chat history - using client-side persistence
   }
 
-  Future<void> _loadChatHistory() async {
-    try {
-      final response = await FirebaseService().getChatHistory();
-      if (response['success'] == true && response['messages'] != null) {
-        final messages = List<Map<String, dynamic>>.from(response['messages']);
-        setState(() {
-          _messages.clear();
-          for (final msg in messages) {
-            _messages.add(ChatMessage(
-              text: msg['content'] ?? '',
-              isUser: msg['role'] == 'user',
-              timestamp: DateTime.tryParse(msg['timestamp'] ?? '') ?? DateTime.now(),
-            ));
-          }
-        });
-      }
-    } catch (e) {
-      print('Error loading chat history: $e');
-    }
-  }
-
-  Future<void> _clearChat() async {
-    try {
-      final response = await FirebaseService().clearChatSession();
-      if (response['success'] == true) {
-        setState(() {
-          _messages.clear();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Chat cancellata con successo'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error clearing chat: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Errore nella cancellazione della chat'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,54 +82,56 @@ class _ChatScreenState extends State<ChatScreen> {
                     itemCount: _messages.length + (_isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == _messages.length && _isLoading) {
-                        // Show loading indicator
+                        // Sleek loading indicator (no bubble), full-width style like AI message
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: const Color(0xFF6B73FF),
-                                child: const Icon(
-                                  Icons.smart_toy,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
+                              Row(
+                                children: const [
+                                  CircleAvatar(
+                                    radius: 12,
+                                    backgroundColor: Color(0xFF6B73FF),
+                                    child: Icon(
+                                      Icons.smart_toy,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Assistant',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  )
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.grey.shade600,
-                                        ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.grey,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Sto pensando...',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade600,
-                                        fontSize: 16,
-                                      ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Sto pensando...',
+                                    style: TextStyle(
+                                      color: Color(0xFF6B7280),
+                                      fontSize: 14,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -183,78 +142,87 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
               ),
-              // Input area
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: InputDecoration(
-                          hintText: 'Type a message...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey.shade100,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
-                        maxLines: null,
-                        textCapitalization: TextCapitalization.sentences,
+              // Input area (glassmorphism + gradient send button)
+              ClipRRect(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.55),
+                    border: Border(
+                      top: BorderSide(
+                        color: Colors.white.withOpacity(0.4),
+                        width: 0.5,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    FloatingActionButton(
-                      onPressed: _isLoading ? null : _sendMessage,
-                      mini: true,
-                      backgroundColor: _isLoading 
-                          ? Colors.grey.shade400 
-                          : const Color(0xFF6B73FF),
-                      foregroundColor: Colors.white,
-                      child: _isLoading 
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            hintStyle: TextStyle(color: Colors.grey.shade500),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          maxLines: null,
+                          textCapitalization: TextCapitalization.sentences,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Gradient circular send button
+                      GestureDetector(
+                        onTap: _isLoading ? null : _sendMessage,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: _isLoading
+                                ? null
+                                : const LinearGradient(
+                                    colors: [Color(0xFFF472B6), Color(0xFFFB923C)],
+                                  ),
+                            color: _isLoading ? Colors.grey.shade400 : null,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFB923C).withOpacity(0.25),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
-                            )
-                          : const Icon(Icons.send),
-                    ),
-                  ],
+                            ],
+                          ),
+                          child: Center(
+                            child: _isLoading
+                                ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Icon(Icons.send, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
                 ],
               ),
             ),
-            // Floating action button for clearing chat
-            if (_messages.isNotEmpty)
-              Positioned(
-                top: 50,
-                right: 16,
-                child: FloatingActionButton(
-                  mini: true,
-                  onPressed: _clearChat,
-                  backgroundColor: Colors.red.withOpacity(0.8),
-                  foregroundColor: Colors.white,
-                  child: const Icon(Icons.clear_all, size: 18),
-                ),
-              ),
           ],
         ),
       ),
@@ -278,8 +246,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
 
     try {
-      // Use the new chat agent for conversational chat
-      final response = await FirebaseService().sendChatAgentMessage(text);
+      // Prepare conversation history for context
+      final conversationHistory = _messages.map((msg) => {
+        'text': msg.text,
+        'isUser': msg.isUser,
+        'timestamp': msg.timestamp.toIso8601String(),
+      }).toList();
+      
+      // Use the new client-side chat approach
+      final response = await FirebaseService().chatWithContext(
+        message: text,
+        conversationHistory: conversationHistory,
+      );
       
       if (response['success'] == true) {
         // Add AI response
@@ -347,58 +325,110 @@ class ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment:
-            message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!message.isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF6B73FF),
-              child: const Icon(
-                Icons.smart_toy,
-                size: 16,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: message.isUser
-                    ? const Color(0xFF6B73FF)
-                    : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  color: message.isUser ? Colors.white : const Color(0xFF2A2A2A),
-                  fontSize: 16,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: message.isUser
+          // USER: light peach bubble aligned to the right
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFED7AA), // more orangy peach
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      message.text,
+                      style: const TextStyle(
+                        color: Color(0xFF2A2A2A),
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey.shade300,
+                  child: const Icon(
+                    Icons.person,
+                    size: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            )
+          // AI: full-width markdown (no bubble), symmetric on page width
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Optional small AI indicator row (subtle)
+                Row(
+                  children: const [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: Color(0xFF6B73FF),
+                      child: Icon(
+                        Icons.smart_toy,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Assistant',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  // keep same horizontal padding as list padding to align nicely
+                  padding: EdgeInsets.zero,
+                  child: MarkdownBody(
+                    data: message.text,
+                    selectable: true,
+                    onTapLink: (text, href, title) async {
+                      if (href == null) return;
+                      final uri = Uri.tryParse(href);
+                      if (uri != null) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                      p: const TextStyle(fontSize: 16, color: Color(0xFF2A2A2A)),
+                      h1: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                      h2: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                      h3: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      codeblockDecoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      code: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 14,
+                        color: Color(0xFF333333),
+                      ),
+                      blockquoteDecoration: BoxDecoration(
+                        color: const Color(0xFFF7F7F7),
+                        border: Border(left: BorderSide(color: Colors.grey, width: 3)),
+                      ),
+                      listBullet: const TextStyle(color: Color(0xFF2A2A2A)),
+                      a: const TextStyle(color: Color(0xFF2563EB), decoration: TextDecoration.underline),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          if (message.isUser) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.grey.shade300,
-              child: const Icon(
-                Icons.person,
-                size: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
