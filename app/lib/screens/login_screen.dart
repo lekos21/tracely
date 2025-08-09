@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/firebase_service.dart';
 import 'dart:math' as math;
+import '../widgets/animated_blob_background.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -113,6 +115,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         ),
         child: Stack(
           children: [
+            // Liquid gradient blob background (behind everything)
+            const AnimatedBlobBackground(),
             // Floating decorative circles
             Positioned(
               top: 80,
@@ -130,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFFF472B6).withValues(alpha: 0.1), // pink-400
+                        color: const Color(0xFFF472B6).withAlpha(26), // pink-400
                       ),
                     ),
                   );
@@ -153,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                       height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFFFB923C).withValues(alpha: 0.1), // orange-400
+                        color: const Color(0xFFFB923C).withAlpha(26), // orange-400
                       ),
                     ),
                   );
@@ -202,11 +206,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                           Container(
                             padding: const EdgeInsets.all(32),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
+                              color: Colors.white.withAlpha(230),
                               borderRadius: BorderRadius.circular(32),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFF472B6).withValues(alpha: 0.1),
+                                  color: const Color(0xFFF472B6).withAlpha(26),
                                   blurRadius: 30,
                                   offset: const Offset(0, 15),
                                 ),
@@ -228,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFF472B6).withValues(alpha: 0.3),
+                                        color: const Color(0xFFF472B6).withAlpha(77),
                                         blurRadius: 20,
                                         offset: const Offset(0, 8),
                                       ),
@@ -243,12 +247,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                 const SizedBox(height: 24),
                                 
                                 // App title
-                                const Text(
-                                  'TraceLy',
-                                  style: TextStyle(
+                                Text(
+                                  'tracely',
+                                  style: GoogleFonts.inter(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1F2937), // gray-800
+                                    color: const Color(0xFF1F2937), // gray-800
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -285,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF4285F4).withValues(alpha: 0.3),
+                                  color: const Color(0xFF4285F4).withAlpha(77),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -308,7 +312,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                   ),
                                 ),
                                 elevation: 2,
-                                shadowColor: Colors.black.withOpacity(0.1),
+                                shadowColor: Colors.black.withAlpha(26),
                               ),
                               child: _isLoading
                                   ? const SizedBox(

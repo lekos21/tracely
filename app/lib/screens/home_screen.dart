@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vibration/vibration.dart';
 import '../services/firebase_service.dart';
 import '../services/card_preloader.dart';
 import 'dart:math' as math;
@@ -20,10 +21,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _successAnimation;
   late AnimationController _floatingAnimationController;
   late List<AnimationController> _heartAnimationControllers;
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+  late AnimationController _fadeInController;
+  late Animation<double> _fadeInAnimation;
+  late AnimationController _slideUpController;
+  late Animation<Offset> _slideUpAnimation;
+  // Removed AudioPlayer - using vibration feedback instead
+  bool _isButtonConfirmed = false;
 
   @override
   void initState() {
     super.initState();
+    // Removed AudioPlayer initialization
     _successAnimationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -40,6 +50,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+    
+    // Initialize shimmer animation for title
+    _shimmerController = AnimationController(
+      duration: const Duration(seconds: 5),
+      vsync: this,
+    )..repeat();
+    _shimmerAnimation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Initialize fade in animation
+    _fadeInController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _fadeInAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeInController,
+      curve: Curves.easeOut,
+    ));
+    
+    // Initialize slide up animation
+    _slideUpController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _slideUpAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideUpController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    // Start entrance animations
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _fadeInController.forward();
+        _slideUpController.forward();
+      }
+    });
     
     // Initialize heart animations
     _heartAnimationControllers = List.generate(8, (index) {
@@ -71,6 +128,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _focusNode.dispose();
     _successAnimationController.dispose();
     _floatingAnimationController.dispose();
+    _shimmerController.dispose();
+    _fadeInController.dispose();
+    _slideUpController.dispose();
+    // Removed AudioPlayer disposal
     for (var controller in _heartAnimationControllers) {
       controller.dispose();
     }
@@ -82,29 +143,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final factText = _factController.text.trim();
     
-    // Optimistic UI: Show immediate success feedback
+    // Add vibration feedback for confirmation
+    _playConfirmationFeedback();
+    
+    // Clear input and show optimistic confirmation
     _factController.clear();
     _focusNode.unfocus();
     
     setState(() {
-      _showSuccess = true;
-      _isLoading = false;
+      _isButtonConfirmed = true;
+      _isLoading = false; // Ensure loading is false to show confirmation
     });
-    
-    // Start success animation immediately
-    _successAnimationController.forward().then((_) {
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          _successAnimationController.reverse();
-          setState(() {
-            _showSuccess = false;
-          });
-        }
-      });
+
+    // Reset button state after showing confirmation
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _isButtonConfirmed = false;
+        });
+      }
     });
     
     // Handle server call asynchronously in background
     _submitFactToServer(factText);
+  }
+
+  void _playConfirmationFeedback() async {
+    try {
+      // Use vibration feedback instead of audio for better reliability
+      if (await Vibration.hasVibrator()) {
+        // Double vibration pattern for confirmation feedback
+        Vibration.vibrate(duration: 100);
+        Future.delayed(const Duration(milliseconds: 150), () {
+          Vibration.vibrate(duration: 100);
+        });
+      }
+    } catch (e) {
+      // Silently handle vibration errors - not critical for UX
+      debugPrint('Could not provide vibration feedback: $e');
+    }
   }
   
   Future<void> _submitFactToServer(String factText) async {
@@ -150,119 +227,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         child: Stack(
           children: [
-            // Background decorative elements
-            Positioned(
-              top: 80,
-              left: 40,
-              child: AnimatedBuilder(
-                animation: _floatingAnimationController,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(
-                      math.sin(_floatingAnimationController.value * 2 * math.pi) * 10,
-                      math.cos(_floatingAnimationController.value * 2 * math.pi) * 5,
-                    ),
-                    child: Container(
-                      width: 128,
-                      height: 128,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFBCFE8).withOpacity(0.3), // pink-200/30
-                            const Color(0xFFFED7AA).withOpacity(0.3), // orange-200/30
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              top: 160,
-              right: 64,
-              child: AnimatedBuilder(
-                animation: _floatingAnimationController,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(
-                      math.cos(_floatingAnimationController.value * 2 * math.pi + 1) * 8,
-                      math.sin(_floatingAnimationController.value * 2 * math.pi + 1) * 6,
-                    ),
-                    child: Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFDBA74).withOpacity(0.2), // orange-300/20
-                            const Color(0xFFF9A8D4).withOpacity(0.2), // pink-300/20
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              bottom: 128,
-              left: MediaQuery.of(context).size.width * 0.25,
-              child: AnimatedBuilder(
-                animation: _floatingAnimationController,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(
-                      math.sin(_floatingAnimationController.value * 2 * math.pi + 2) * 12,
-                      math.cos(_floatingAnimationController.value * 2 * math.pi + 2) * 8,
-                    ),
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFECDD3).withOpacity(0.25), // peach-200/25
-                            const Color(0xFFFBCFE8).withOpacity(0.25), // pink-200/25
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              bottom: 80,
-              right: 32,
-              child: AnimatedBuilder(
-                animation: _floatingAnimationController,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(
-                      math.cos(_floatingAnimationController.value * 2 * math.pi + 3) * 6,
-                      math.sin(_floatingAnimationController.value * 2 * math.pi + 3) * 10,
-                    ),
-                    child: Container(
-                      width: 112,
-                      height: 112,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFED7AA).withOpacity(0.3), // orange-200/30
-                            const Color(0xFFFBCFE8).withOpacity(0.3), // pink-200/30
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+
             
             // Floating hearts animation
             ...List.generate(8, (index) {
@@ -296,49 +261,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       // Add some top spacing
                       SizedBox(height: MediaQuery.of(context).size.height * 0.05),
                       
-                      // Hero Text
-                      Column(
-                        children: [
-                          ShaderMask(
-                            shaderCallback: (bounds) => const LinearGradient(
-                              colors: [Color(0xFFEC4899), Color(0xFFF97316)], // pink-500 to orange-500
-                            ).createShader(bounds),
-                            child: const Text(
-                              'Never forget the\nlittle things',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                height: 1.2,
+                      // Hero Text with animations
+                      FadeTransition(
+                        opacity: _fadeInAnimation,
+                        child: SlideTransition(
+                          position: _slideUpAnimation,
+                          child: Column(
+                            children: [
+                              AnimatedBuilder(
+                                animation: _shimmerAnimation,
+                                builder: (context, child) {
+                                  return ShaderMask(
+                                    shaderCallback: (bounds) {
+                                      return LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: const [
+                                          Color(0xFFEC4899), // pink-500
+                                          Color(0xFFF97316), // orange-500
+                                          Color(0xFFEC4899), // pink-500
+                                        ],
+                                        stops: [
+                                          _shimmerAnimation.value - 0.3,
+                                          _shimmerAnimation.value,
+                                          _shimmerAnimation.value + 0.3,
+                                        ],
+                                        transform: const GradientRotation(0.5),
+                                      ).createShader(bounds);
+                                    },
+                                    child: const Text(
+                                      'Never forget the\nlittle things',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 600),
+                                style: TextStyle(
+                                  color: const Color(0xFF6B7280), // gray-600
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                                child: const Text(
+                                  'Store memories, preferences, and ideas. Let AI help you be the most thoughtful partner ever.',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Store memories, preferences, and ideas. Let AI help you be the most thoughtful partner ever.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF6B7280), // gray-600
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                       
                       const SizedBox(height: 32),
                       
-                      // Input Section
-                      Column(
+                      // Input Section with fade animation
+                      FadeTransition(
+                        opacity: _fadeInAnimation,
+                        child: Column(
                         children: [
                           Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF4A4A4A).withOpacity(0.1),
+                                  color: const Color(0xFF4A4A4A).withAlpha(26),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -357,11 +352,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 filled: true,
                                 fillColor: _isInputFocused 
                                     ? Colors.white 
-                                    : Colors.white.withOpacity(0.8),
+                                    : Colors.white.withAlpha(204),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide(
-                                    color: const Color(0xFFFBCFE8).withOpacity(0.5), // pink-200/50
+                                    color: const Color(0xFFFBCFE8).withAlpha(128), // pink-200/50
                                     width: 2,
                                   ),
                                 ),
@@ -375,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide(
-                                    color: const Color(0xFFFBCFE8).withOpacity(0.5), // pink-200/50
+                                    color: const Color(0xFFFBCFE8).withAlpha(128), // pink-200/50
                                     width: 2,
                                   ),
                                 ),
@@ -417,7 +412,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 borderRadius: BorderRadius.circular(24),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFEC4899).withOpacity(0.3),
+                                    color: const Color(0xFFEC4899).withAlpha(77),
                                     blurRadius: 20,
                                     offset: const Offset(0, 8),
                                   ),
@@ -433,37 +428,61 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       horizontal: 32,
                                       vertical: 16,
                                     ),
-                                    child: _isLoading
-                                        ? const SizedBox(
-                                            height: 22,
-                                            width: 22,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Text(
-                                            'Remember this',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                  ),
+                                    child: _isButtonConfirmed
+                                         ? const Row(
+                                             mainAxisAlignment: MainAxisAlignment.center,
+                                             children: [
+                                               Icon(
+                                                 Icons.check_circle,
+                                                 color: Colors.white,
+                                                 size: 20,
+                                               ),
+                                               SizedBox(width: 8),
+                                               Text(
+                                                 'Saved!',
+                                                 textAlign: TextAlign.center,
+                                                 style: TextStyle(
+                                                   color: Colors.white,
+                                                   fontSize: 18,
+                                                   fontWeight: FontWeight.bold,
+                                                 ),
+                                               ),
+                                             ],
+                                           )
+                                         : _isLoading
+                                             ? const SizedBox(
+                                                 height: 22,
+                                                 width: 22,
+                                                 child: CircularProgressIndicator(
+                                                   strokeWidth: 2.5,
+                                                   color: Colors.white,
+                                                 ),
+                                               )
+                                             : const Text(
+                                                 'Remember this',
+                                                 textAlign: TextAlign.center,
+                                                 style: TextStyle(
+                                                   color: Colors.white,
+                                                   fontSize: 18,
+                                                   fontWeight: FontWeight.bold,
+                                                 ),
+                                               ),
                                 ),
                               ),
                             ),
                           ),
+                        ),
                         ],
+                      ),
                       ),
                       
                       const SizedBox(height: 32),
                       
-                      // Feature Preview
-                      Column(
-                        children: [
+                      // Feature Preview with staggered animation
+                      FadeTransition(
+                        opacity: _fadeInAnimation,
+                        child: Column(
+                          children: [
                           const Text(
                             'AI-POWERED SUGGESTIONS FOR',
                             style: TextStyle(
@@ -480,10 +499,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.6),
+                                    color: Colors.white.withAlpha(153),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                      color: const Color(0xFFFBCFE8).withOpacity(0.3), // pink-200/30
+                                      color: const Color(0xFFFBCFE8).withAlpha(77), // pink-200/30
                                     ),
                                   ),
                                   child: const Column(
@@ -511,10 +530,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.6),
+                                    color: Colors.white.withAlpha(153),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                      color: const Color(0xFFFED7AA).withOpacity(0.3), // orange-200/30
+                                      color: const Color(0xFFFED7AA).withAlpha(77), // orange-200/30
                                     ),
                                   ),
                                   child: const Column(
@@ -540,6 +559,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ],
                           ),
                         ],
+                      ),
                       ),
                       
                       // Footer
@@ -612,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF10B981).withOpacity(0.3),
+                              color: const Color(0xFF10B981).withAlpha(77),
                               blurRadius: 20,
                               offset: const Offset(0, 8),
                             ),

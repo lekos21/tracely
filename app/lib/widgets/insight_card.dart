@@ -4,6 +4,7 @@ class InsightCard {
   final String content;
   final String icon;
   final List<String> tags;
+  final int effort;
 
   InsightCard({
     required this.type,
@@ -11,16 +12,40 @@ class InsightCard {
     required this.content,
     required this.icon,
     this.tags = const [],
+    this.effort = 1,
   });
 
   factory InsightCard.fromRecommendation(Map<String, dynamic> suggestion) {
-    final tags = List<String>.from(suggestion['tags'] ?? []);
+    // Normalize tags to List<String>
+    List<String> tags = const [];
+    final dynamic rawTags = suggestion['tags'];
+    if (rawTags is List) {
+      tags = rawTags.map((e) => e.toString()).toList();
+    } else if (rawTags is String && rawTags.trim().isNotEmpty) {
+      // Support comma-separated string as a fallback
+      tags = rawTags.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+
+    // Normalize content field across possible keys
+    final String content = (suggestion['sentence'] ??
+            suggestion['text'] ??
+            suggestion['content'] ??
+            suggestion['suggestion'] ??
+            '')
+        .toString();
+
+    // Extract effort score (default to 1 if not provided)
+    final int effort = (suggestion['effort'] is int) 
+        ? suggestion['effort'] as int
+        : 1;
+
     return InsightCard(
       type: _getTypeFromTags(tags),
       title: _getTitleFromTags(tags),
-      content: suggestion['sentence'] ?? '',
+      content: content,
       icon: _getIconFromTags(tags),
       tags: tags,
+      effort: effort,
     );
   }
 
@@ -47,7 +72,7 @@ class InsightCard {
 
   static String _getIconFromTags(List<String> tags) {
     if (tags.contains('gifts')) return '🎁';
-    if (tags.contains('dates')) return '💕';
+    if (tags.contains('dates')) return '🌸';
     if (tags.contains('activities')) return '🎯';
     if (tags.contains('food')) return '🍽️';
     if (tags.contains('people')) return '👥';

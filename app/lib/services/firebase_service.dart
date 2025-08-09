@@ -228,9 +228,31 @@ class FirebaseService {
       
       print('DEBUG: generate_recommendations response: ${result.data}');
       // Handle response format consistently like process_chat_message
-      final backendResponse = result.data['result'] ?? result.data;
-      // Fix type casting issue for mobile
-      return Map<String, dynamic>.from(backendResponse as Map);
+      // Normalize response to Map<String, dynamic> safely across platforms
+      final raw = result.data is Map ? result.data as Map : <String, dynamic>{};
+      final backendResponse = raw.containsKey('result') ? raw['result'] : raw;
+
+      // Coerce to Map<String, dynamic>
+      final Map<String, dynamic> normalized = {};
+      (backendResponse as Map).forEach((key, value) {
+        normalized[key.toString()] = value;
+      });
+
+      // Normalize suggestions list items to Map<String, dynamic>
+      if (normalized['suggestions'] is List) {
+        final list = normalized['suggestions'] as List;
+        normalized['suggestions'] = list.map((item) {
+          if (item is Map) {
+            final m = <String, dynamic>{};
+            item.forEach((k, v) => m[k.toString()] = v);
+            return m;
+          }
+          // Fallback: if item is a string, wrap it
+          return { 'sentence': item?.toString() ?? '' };
+        }).toList();
+      }
+
+      return normalized;
     } catch (e) {
       print('ERROR: generateRecommendations failed with: $e');
       print('ERROR: Exception type: ${e.runtimeType}');
@@ -314,13 +336,20 @@ class FirebaseService {
     }
   }
   
-  Future<Map<String, dynamic>> updateFact(String factId, String newFactText) async {
+  Future<Map<String, dynamic>> updateFact(String factId, String newFactText, {List<String>? tags}) async {
     try {
       final callable = _functions.httpsCallable('update_fact');
-      final result = await callable.call({
+      final Map<String, dynamic> params = {
         'fact_id': factId,
         'fact_text': newFactText,
-      });
+      };
+      
+      // Add tags if provided
+      if (tags != null) {
+        params['tags'] = tags;
+      }
+      
+      final result = await callable.call(params);
       
       return Map<String, dynamic>.from(result.data);
     } catch (e) {

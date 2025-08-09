@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/firebase_service.dart';
+import '../widgets/typing_indicator.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -111,27 +112,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Sto pensando...',
-                                    style: TextStyle(
-                                      color: Color(0xFF6B7280),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: TypingIndicator(),
                               ),
                             ],
                           ),
@@ -147,10 +130,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.55),
+                    color: Colors.white.withAlpha(140),
                     border: Border(
                       top: BorderSide(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withAlpha(102),
                         width: 0.5,
                       ),
                     ),
@@ -168,7 +151,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               borderSide: BorderSide.none,
                             ),
                             filled: true,
-                            fillColor: Colors.white.withOpacity(0.8),
+                            fillColor: Colors.white.withAlpha(204),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 12,
@@ -196,7 +179,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFB923C).withOpacity(0.25),
+                                color: const Color(0xFFFB923C).withAlpha(64),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),

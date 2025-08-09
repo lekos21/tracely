@@ -33,11 +33,19 @@ class _MainNavigationState extends State<MainNavigation> {
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.35),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFFFFFBEB).withOpacity(0.95), // amber-50 with high opacity
+                    const Color(0xFFFDF2F8).withOpacity(0.95), // pink-50 with high opacity
+                    const Color(0xFFFEF3E2).withOpacity(0.95), // orange-50 with high opacity
+                  ],
+                ),
                 border: Border(
                   bottom: BorderSide(
-                    color: const Color(0xFFFFFFFF).withOpacity(0.4),
-                    width: 1,
+                    color: const Color(0xFFF472B6).withOpacity(0.2), // pink accent border
+                    width: 1.5,
                   ),
                 ),
               ),
@@ -68,7 +76,7 @@ class _MainNavigationState extends State<MainNavigation> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF472B6).withOpacity(0.25),
+                            color: const Color(0xFFF472B6).withAlpha(64),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -129,7 +137,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4A4A4A).withValues(alpha: 0.08),
+              color: const Color(0xFF4A4A4A).withAlpha(20),
               blurRadius: 20,
               offset: const Offset(0, -8),
             ),
@@ -138,7 +146,7 @@ class _MainNavigationState extends State<MainNavigation> {
         child: SafeArea(
           child: Container(
             height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -198,7 +206,7 @@ class _MainNavigationState extends State<MainNavigation> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: isSelected ? [
             BoxShadow(
-              color: const Color(0xFFF472B6).withValues(alpha: 0.3),
+              color: const Color(0xFFF472B6).withAlpha(77),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),

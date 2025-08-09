@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vibration/vibration.dart';
 import '../services/firebase_service.dart';
 
 class FactsScreen extends StatefulWidget {
@@ -63,18 +64,228 @@ class _FactsScreenState extends State<FactsScreen> {
 
   void _filterByTag(String? tag) {
     setState(() {
-      _selectedTagFilter = tag;
-      if (tag == null) {
+      // If clicking the same tag, deselect it and show all
+      if (_selectedTagFilter == tag) {
+        _selectedTagFilter = null;
         _filteredFacts = _facts;
       } else {
-        _filteredFacts = _facts.where((fact) {
-          final factTags = List<String>.from(fact['tags'] ?? []);
-          return factTags.contains(tag);
-        }).toList();
+        _selectedTagFilter = tag;
+        if (tag == null) {
+          _filteredFacts = _facts;
+        } else {
+          _filteredFacts = _facts.where((fact) {
+            final factTags = List<String>.from(fact['tags'] ?? []);
+            return factTags.contains(tag);
+          }).toList();
+        }
       }
     });
   }
+  
+  // Show input overlay (modal bottom sheet) to add a new fact
+  void _showAddFactSheet() {
+    final rootContext = context;
+    showModalBottomSheet(
+      context: rootContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
+      builder: (sheetContext) {
+        final TextEditingController controller = TextEditingController();
+        final FocusNode focusNode = FocusNode();
+        bool isSaving = false;
 
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
+              final text = controller.text.trim();
+              if (text.isEmpty || isSaving) return;
+              setModalState(() => isSaving = true);
+              try {
+                final result = await FirebaseService().saveFact(text);
+                setModalState(() => isSaving = false);
+                if (result['success'] == true) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(rootContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Fact saved'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  // Refresh list
+                  _loadFacts();
+                } else {
+                  ScaffoldMessenger.of(rootContext).showSnackBar(
+                    SnackBar(
+                      content: Text(result['message'] ?? 'Failed to save fact'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                setModalState(() => isSaving = false);
+                ScaffoldMessenger.of(rootContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Network error. Your fact may not have been saved.'),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                color: Colors.transparent,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF4A4A4A).withAlpha(38),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CA3AF).withAlpha(102),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Her favorite color is...',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF9CA3AF), // gray-400
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide(
+                                color: Color(0xFFFBCFE8).withAlpha(128), // pink-200/50
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFF9A8D4), // pink-300
+                                width: 2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide(
+                                color: Color(0xFFFBCFE8).withAlpha(128), // pink-200/50
+                                width: 2,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            suffixIcon: const Icon(
+                              Icons.chat_bubble_outline,
+                              color: Color(0xFF9CA3AF), // gray-400
+                              size: 24,
+                            ),
+                          ),
+                          style: const TextStyle(
+                            color: Color(0xFF374151), // gray-700
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          onSubmitted: (_) => submit(),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEC4899), Color(0xFFF97316)], // pink-500 to orange-500
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEC4899).withAlpha(77),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: isSaving ? null : submit,
+                              borderRadius: BorderRadius.circular(24),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 14,
+                                ),
+                                child: Center(
+                                  child: isSaving
+                                      ? const SizedBox(
+                                          height: 22,
+                                          width: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Remember this',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: MediaQuery.of(context).padding.bottom),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
   Future<void> _deleteFact(String factId) async {
     // Store the fact for potential restoration
     final factToDelete = _facts.firstWhere((fact) => fact['id'] == factId);
@@ -143,46 +354,221 @@ class _FactsScreenState extends State<FactsScreen> {
     final TextEditingController controller = TextEditingController(
       text: fact['fact'] ?? '',
     );
+    
+    // Get current tags from the fact
+    final List<String> currentTags = List<String>.from(fact['tags'] ?? []);
+    final Set<String> selectedTags = Set<String>.from(currentTags);
 
-    final result = await showDialog<String>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Fact'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Enter your fact...',
-            border: OutlineInputBorder(),
+      barrierDismissible: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          maxLines: 3,
-          autofocus: true,
+          title: const Text(
+            'Edit Fact',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              color: Color(0xFF2A2A2A),
+            ),
+          ),
+          content: Container(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Text field
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your fact...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFEC4899),
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                  maxLines: 4,
+                  minLines: 3,
+                  autofocus: true,
+                ),
+                const SizedBox(height: 20),
+                
+                // Tags section
+                const Text(
+                  'Tags',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2A2A2A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Select tags that describe this fact:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF666666),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Tag chips
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _availableTags.map((tag) {
+                    final isSelected = selectedTags.contains(tag);
+                    final tagColor = _getTagColor(tag);
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          if (isSelected) {
+                            selectedTags.remove(tag);
+                          } else {
+                            selectedTags.add(tag);
+                          }
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected 
+                            ? tagColor.withOpacity(0.2)
+                            : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected 
+                              ? tagColor
+                              : Colors.grey[300]!,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isSelected)
+                              Icon(
+                                Icons.check_circle,
+                                size: 16,
+                                color: tagColor,
+                              ),
+                            if (isSelected) const SizedBox(width: 4),
+                            Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected 
+                                  ? FontWeight.w600 
+                                  : FontWeight.w500,
+                                color: isSelected 
+                                  ? tagColor 
+                                  : Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFB923C), // orange-400
+                    Color(0xFFF97316), // orange-500
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  final text = controller.text.trim();
+                  if (text.isNotEmpty) {
+                    Navigator.of(context).pop({
+                      'text': text,
+                      'tags': selectedTags.toList(),
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) {
-                Navigator.of(context).pop(text);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
 
-    if (result != null && result != fact['fact']) {
+    if (result != null && (result['text'] != fact['fact'] || !_listEquals(result['tags'], currentTags))) {
       // Optimistic update
       final originalFact = Map<String, dynamic>.from(fact);
       final factIndex = _facts.indexWhere((f) => f['id'] == fact['id']);
       
       setState(() {
-        _facts[factIndex]['fact'] = result;
+        _facts[factIndex]['fact'] = result['text'];
+        _facts[factIndex]['tags'] = result['tags'];
         _filterByTag(_selectedTagFilter);
       });
 
@@ -200,7 +586,11 @@ class _FactsScreenState extends State<FactsScreen> {
       // Sync with backend
       try {
         final firebaseService = FirebaseService();
-        final updateResult = await firebaseService.updateFact(fact['id'], result);
+        final updateResult = await firebaseService.updateFact(
+          fact['id'], 
+          result['text'],
+          tags: result['tags'],
+        );
 
         if (!updateResult['success']) {
           // Revert on failure
@@ -228,16 +618,26 @@ class _FactsScreenState extends State<FactsScreen> {
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Connection error - update reverted'),
+            SnackBar(
+              content: Text('Error updating fact: $e'),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
         print('Error updating fact: $e');
       }
     }
+  }
+
+  // Helper function to compare lists
+  bool _listEquals<T>(List<T>? a, List<T>? b) {
+    if (a == null) return b == null;
+    if (b == null || a.length != b.length) return false;
+    for (int index = 0; index < a.length; index += 1) {
+      if (a[index] != b[index]) return false;
+    }
+    return true;
   }
 
   Color _getTagColor(String tag) {
@@ -264,6 +664,35 @@ class _FactsScreenState extends State<FactsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF472B6), // pink-400
+              Color(0xFFEC4899), // pink-500
+              Color(0xFFFB923C), // orange-400
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEC4899).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          heroTag: 'addFactFab',
+          onPressed: _showAddFactSheet,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
+      ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -286,11 +715,11 @@ class _FactsScreenState extends State<FactsScreen> {
                 margin: const EdgeInsets.only(left: 20, right: 20, top: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withAlpha(230),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF4A4A4A).withOpacity(0.06),
+                      color: const Color(0xFF4A4A4A).withAlpha(15),
                       blurRadius: 10,
                       offset: const Offset(0, 2),
                     ),
@@ -304,7 +733,7 @@ class _FactsScreenState extends State<FactsScreen> {
                         label: const Text('All', style: TextStyle(fontSize: 13)),
                         selected: _selectedTagFilter == null,
                         onSelected: (_) => _filterByTag(null),
-                        selectedColor: Colors.blue.withOpacity(0.15),
+                        selectedColor: Colors.blue.withAlpha(38),
                         backgroundColor: Colors.grey[100],
                         side: BorderSide.none,
                         elevation: 0,
@@ -317,7 +746,7 @@ class _FactsScreenState extends State<FactsScreen> {
                           label: Text(tag, style: const TextStyle(fontSize: 13)),
                           selected: _selectedTagFilter == tag,
                           onSelected: (_) => _filterByTag(tag),
-                          selectedColor: _getTagColor(tag).withOpacity(0.15),
+                          selectedColor: _getTagColor(tag).withAlpha(38),
                           backgroundColor: Colors.grey[100],
                           checkmarkColor: _getTagColor(tag),
                           side: BorderSide.none,
@@ -415,11 +844,86 @@ class _FactsScreenState extends State<FactsScreen> {
                                   itemCount: _filteredFacts.length,
                                   itemBuilder: (context, index) {
                                     final fact = _filteredFacts[index];
-                                    return FactCard(
-                                      fact: fact,
-                                      getTagColor: _getTagColor,
-                                      onEdit: () => _editFact(fact),
-                                      onDelete: () => _deleteFact(fact['id']),
+                                    return Dismissible(
+                                      key: Key(fact['id']),
+                                      direction: DismissDirection.endToStart,
+                                      confirmDismiss: (direction) async {
+                                        // Vibrate on swipe gesture
+                                        if (await Vibration.hasVibrator()) {
+                                          Vibration.vibrate(duration: 50);
+                                        }
+                                        return await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            title: const Text(
+                                              'Delete Fact',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 18,
+                                              ),
+                                            ),
+                                            content: const Text(
+                                              'Are you sure you want to delete this fact? This action cannot be undone.',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.of(context).pop(false),
+                                                child: const Text(
+                                                  'Cancel',
+                                                  style: TextStyle(color: Colors.grey),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.of(context).pop(true),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                ),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ?? false;
+                                      },
+                                      onDismissed: (direction) {
+                                        _deleteFact(fact['id']);
+                                      },
+                                      background: Container(
+                                        margin: const EdgeInsets.only(bottom: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.only(right: 20),
+                                        child: const Icon(
+                                          Icons.delete_rounded,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      child: GestureDetector(
+                                        onLongPress: () async {
+                                          // Vibrate on long press
+                                          if (await Vibration.hasVibrator()) {
+                                            Vibration.vibrate(duration: 100);
+                                          }
+                                          _editFact(fact);
+                                        },
+                                        child: FactCard(
+                                          fact: fact,
+                                          getTagColor: _getTagColor,
+                                          onEdit: () => _editFact(fact),
+                                          onDelete: () => _deleteFact(fact['id']),
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),
@@ -451,7 +955,6 @@ class FactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final factText = fact['fact'] ?? '';
     final tags = List<String>.from(fact['tags'] ?? []);
-    final sentiment = fact['sentiment'] ?? 'neutral';
     final date = fact['date'] != null 
         ? DateTime.tryParse(fact['date'].toString())
         : null;
@@ -466,192 +969,115 @@ class FactCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.grey.withOpacity(0.08),
+          color: Colors.grey.withAlpha(20),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: IntrinsicHeight(
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Left side: full-height sentiment indicator
-            Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: _getSentimentColor(sentiment),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(7),
-                  bottomLeft: Radius.circular(7),
-                ),
-              ),
-            ),
             // Main content
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Tags and date row (above the fact)
-                    Row(
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Tags
-                        if (tags.isNotEmpty) ...
-                          tags.take(3).map((tag) => Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: getTagColor(tag).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              tag,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: getTagColor(tag),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          )).toList(),
-                        if (tags.length > 3)
-                          Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '+${tags.length - 3}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                        // Tags row (without date)
+                        if (tags.isNotEmpty)
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            children: [
+                              ...tags.take(3).map((tag) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: getTagColor(tag).withAlpha(26),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: getTagColor(tag),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )).toList(),
+                              if (tags.length > 3)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withAlpha(26),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '+${tags.length - 3}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        const Spacer(),
-                        // Date in Italian format (9-lug)
-                        if (date != null)
-                          Text(
-                            '${date.day}-${monthAbbreviations[date.month - 1]}',
+                        SizedBox(height: tags.isNotEmpty ? 4 : 0),
+                        // Fact text
+                        Padding(
+                          padding: const EdgeInsets.only(right: 40), // Make space for date
+                          child: Text(
+                            factText,
                             style: const TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF999999),
-                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                              color: Color(0xFF2A2A2A),
+                              height: 1.2,
+                              fontWeight: FontWeight.w400,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    // Fact text
-                    Text(
-                      factText,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: const Color(0xFF2A2A2A),
-                        height: 1.3,
-                        fontWeight: FontWeight.w400,
+                  ),
+                  // Date positioned in top right corner
+                  if (date != null)
+                    Positioned(
+                      top: 8,
+                      right: 12,
+                      child: Text(
+                        '${date.day}-${monthAbbreviations[date.month - 1]}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF999999),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            // Right side: actions
-            Padding(
-              padding: const EdgeInsets.only(right: 4, top: 4),
-              child: PopupMenuButton<String>(
-                icon: const Icon(
-                  Icons.more_vert,
-                  size: 16,
-                  color: Color(0xFFBBBBBB),
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    onEdit();
-                  } else if (value == 'delete') {
-                    _showDeleteConfirmation(context);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.edit_rounded, size: 16),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.delete_rounded, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Color _getSentimentColor(String sentiment) {
-    switch (sentiment) {
-      case 'positive':
-        return Colors.green;
-      case 'negative':
-        return Colors.red;
-      case 'neutral':
-      default:
-        return Colors.grey;
-    }
-  }
-
-  void _showDeleteConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Fact'),
-        content: const Text('Are you sure you want to delete this fact? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onDelete();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }

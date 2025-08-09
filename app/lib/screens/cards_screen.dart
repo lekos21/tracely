@@ -133,7 +133,7 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                 height: 150,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF472B6).withValues(alpha: 0.1), // pink-400
+                  color: const Color(0xFFF472B6).withAlpha(26), // pink-400
                 ),
               ),
             ),
@@ -145,7 +145,7 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFFB923C).withValues(alpha: 0.1), // orange-400
+                  color: const Color(0xFFFB923C).withAlpha(26), // orange-400
                 ),
               ),
             ),
@@ -173,7 +173,7 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: const Color(0xFFF472B6).withOpacity(0.3),
+                                          color: const Color(0xFFF472B6).withAlpha(77),
                                           width: 3,
                                         ),
                                       ),
@@ -200,8 +200,8 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                                         shape: BoxShape.circle,
                                         gradient: LinearGradient(
                                           colors: [
-                                            const Color(0xFFF472B6).withOpacity(0.6),
-                                            const Color(0xFFFB923C).withOpacity(0.6),
+                                            const Color(0xFFF472B6).withAlpha(153),
+                                            const Color(0xFFFB923C).withAlpha(153),
                                           ],
                                         ),
                                       ),
@@ -252,7 +252,7 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                                   shape: BoxShape.circle,
                                   color: index <= _currentPhraseIndex
                                       ? const Color(0xFFF472B6)
-                                      : const Color(0xFFF472B6).withOpacity(0.3),
+                                      : const Color(0xFFF472B6).withAlpha(77),
                                 ),
                               );
                             }),
@@ -339,20 +339,47 @@ class _CardsScreenState extends State<CardsScreen> with TickerProviderStateMixin
                                       setState(() {
                                         _currentIndex = index;
                                       });
+                                      // Vibration removed - kept only on Facts page
                                     },
                                     itemCount: _cards.length,
                                     itemBuilder: (context, index) {
-                                      return Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 32,
-                                            vertical: 16,
-                                          ),
-                                          child: DraggableCard(
-                                            card: _cards[index],
-                                            isInteractive: false,
-                                          ),
-                                        ),
+                                      return AnimatedBuilder(
+                                        animation: _pageController,
+                                        builder: (context, child) {
+                                          double page = _currentIndex.toDouble();
+                                          if (_pageController.hasClients &&
+                                              _pageController.position.hasPixels &&
+                                              _pageController.position.haveDimensions) {
+                                            page = _pageController.page ?? _currentIndex.toDouble();
+                                          }
+                                          final double delta = (index - page);
+                                          final double clamped = delta.clamp(-1.0, 1.0).toDouble();
+                                          final double rotationX = clamped * 0.20; // ~11 degrees max
+                                          final double translateY = clamped * 30.0;
+                                          final double scale = 1.0 - (clamped.abs() * 0.06);
+
+                                          return Center(
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 32,
+                                                vertical: 16,
+                                              ),
+                                              child: Transform(
+                                                alignment: Alignment.center,
+                                                transform: Matrix4.identity()
+                                                  ..setEntry(3, 2, 0.0015) // perspective
+                                                  ..translate(0.0, translateY)
+                                                  ..rotateX(rotationX)
+                                                  ..scale(scale),
+                                                child: DraggableCard(
+                                                  card: _cards[index],
+                                                  isInteractive: false,
+                                                  parallax: clamped,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       );
                                     },
                                   ),
