@@ -27,13 +27,11 @@ class FactProcessor:
     def __init__(self):
         self.db = firestore.client()
         
-        # Initialize OpenAI with GPT-5 nano - optimized for latency
+        # Initialize OpenAI with GPT-4o mini - optimized for latency and cost
         self.llm = ChatOpenAI(
-            model="gpt-5-nano",  
-            temperature=0.3,
+            model="gpt-5-nano", 
             openai_api_key=os.getenv("OPENAI_API_KEY"),
-            max_tokens=200,  # Limit response length for faster processing
-            timeout=15  # 10 second timeout to prevent hanging
+            timeout=15  # 15 second timeout to prevent hanging
         )
         
         # Initialize Pydantic output parser
@@ -108,16 +106,22 @@ Sentiment: "negative"
 
 Input da analizzare: {user_input}"""
             
+            print(f"DEBUG: Processing input: {user_input}")
+            
             # Get response from GPT-5 nano with optimized call
             response = self.llm.invoke([HumanMessage(content=prompt)])
             response_text = response.content.strip()
             
+            print(f"DEBUG: AI Response: {response_text}")
+            
             # Quick check for SKIP response
             if "SKIP" in response_text.upper():
+                print("DEBUG: AI returned SKIP")
                 return None
                 
             # Optimized parsing: try Pydantic first, fallback to manual parsing
             try:
+                print(f"DEBUG: Attempting to parse response with Pydantic")
                 fact_model = self.output_parser.parse(response_text)
                 
                 # Convert to dict and add metadata
@@ -128,10 +132,11 @@ Input da analizzare: {user_input}"""
                     "date": datetime.now().isoformat()
                 }
                 
+                print(f"DEBUG: Successfully parsed fact: {fact_data}")
                 return fact_data
                 
             except Exception as parse_error:
-                print(f"Failed to parse structured response: {response_text}, Error: {parse_error}")
+                print(f"DEBUG: Failed to parse structured response: {response_text}, Error: {parse_error}")
                 return None
                 
         except Exception as e:

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  firebase-functions:
+    build:
+      context: ./backend/functions
+      dockerfile: Dockerfile.local
+    ports:
+      - "5001:5001"  # Firebase Functions Emulator
+    environment:
+      - FUNCTIONS_EMULATOR_HOST=0.0.0.0
+      - FUNCTIONS_EMULATOR_PORT=5001
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
+    volumes:
+      - ./backend/functions:/app
+      - ./service-account-key.json:/app/service-account-key.json:ro
+    env_file:
+      - ./backend/functions/.env
+    command: >
+      sh -c "
+        npm install -g firebase-tools &&
+        cd /app &&
+        pip install -r requirements.txt &&
+        firebase emulators:start --only functions --host 0.0.0.0 --port 5001
+      "
+    networks:
+      - tracely-local
+
+networks:
+  tracely-local:
+    driver: bridge

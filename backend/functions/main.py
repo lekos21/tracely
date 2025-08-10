@@ -391,6 +391,7 @@ def update_fact(req):
         
         fact_id = req.data.get('fact_id')
         fact_text = req.data.get('fact_text')
+        manual_tags = req.data.get('tags')  # Optional manual tags from client
         
         if not fact_id or not fact_text:
             return {
@@ -398,48 +399,69 @@ def update_fact(req):
                 'error': 'Missing fact_id or fact_text'
             }
         
-        # Process the new fact text with AI to get updated tags and sentiment
-        result = get_fact_processor().process_input_to_fact(fact_text, user_id)
-        
-        if result:
-            # Update the fact in Firestore
-            from firebase_admin import firestore
-            db = firestore.client()
+        # If manual tags are provided, use them; otherwise use AI processing
+        if manual_tags is not None:
+            # Validate manual tags against available tags
+            available_tags = ["people", "dislikes", "gifts", "activities", "dates", "food", "history"]
+            validated_tags = [tag for tag in manual_tags if tag in available_tags]
             
-            # Use the correct path: users/{user_id}/facts/{fact_id}
-            fact_ref = (db.collection('users')
-                       .document(user_id)
-                       .collection('facts')
-                       .document(fact_id))
+            # Still process with AI to get sentiment, but use manual tags
+            ai_result = get_fact_processor().process_input_to_fact(fact_text, user_id)
             
-            fact_doc = fact_ref.get()
-            
-            if not fact_doc.exists:
+            if ai_result:
+                result = {
+                    'fact': ai_result['fact'],
+                    'tags': validated_tags,  # Use manual tags instead of AI tags
+                    'sentiment': ai_result['sentiment']
+                }
+            else:
                 return {
                     'success': False,
-                    'error': 'Fact not found'
+                    'error': 'Invalid fact content'
                 }
-            
-            # Update with new processed data
-            update_data = {
-                'fact': result['fact'],
-                'tags': result['tags'],
-                'sentiment': result['sentiment'],
-                'updated_at': firestore.SERVER_TIMESTAMP
-            }
-            
-            fact_ref.update(update_data)
-            
-            return {
-                'success': True,
-                'message': 'Fact updated successfully',
-                'fact': result
-            }
         else:
+            # Use full AI processing (existing behavior)
+            result = get_fact_processor().process_input_to_fact(fact_text, user_id)
+            
+            if not result:
+                return {
+                    'success': False,
+                    'error': 'Invalid fact content'
+                }
+        
+        # Update the fact in Firestore
+        from firebase_admin import firestore
+        db = firestore.client()
+        
+        # Use the correct path: users/{user_id}/facts/{fact_id}
+        fact_ref = (db.collection('users')
+                   .document(user_id)
+                   .collection('facts')
+                   .document(fact_id))
+        
+        fact_doc = fact_ref.get()
+        
+        if not fact_doc.exists:
             return {
                 'success': False,
-                'error': 'Invalid fact content'
+                'error': 'Fact not found'
             }
+        
+        # Update with new processed data
+        update_data = {
+            'fact': result['fact'],
+            'tags': result['tags'],
+            'sentiment': result['sentiment'],
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        
+        fact_ref.update(update_data)
+        
+        return {
+            'success': True,
+            'message': 'Fact updated successfully',
+            'fact': result
+        }
         
     except Exception as e:
         print(f"Error in update_fact: {e}")

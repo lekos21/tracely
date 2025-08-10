@@ -16,6 +16,7 @@ class SuggestionModel(BaseModel):
     """Pydantic model for a single recommendation suggestion"""
     sentence: str = Field(description="Una frase breve e actionable che descrive il suggerimento")
     tags: List[str] = Field(description="Lista di tag associati al suggerimento (massimo 3)", max_items=3)
+    effort: int = Field(description="Livello di sforzo richiesto da 1 (minimo) a 3 (massimo)", ge=1, le=3)
 
 class RecommendationResponse(BaseModel):
     """Pydantic model for the complete recommendation response"""
@@ -124,9 +125,9 @@ class RecommendationAgent:
 Sei un assistente AI creativo e intuitivo, specializzato nel trasformare piccoli dettagli in gesti d'amore memorabili.
 Il tuo superpotere è leggere tra le righe dei fatti e immaginare modi sorprendenti per far sentire speciale la persona amata.
 
-Crea {count} suggerimenti o reminder che vanno oltre l'ovvio - pensa come un detective dell'amore che scopre opportunità nascoste!
+Crea {count} suggerimenti bilanciati tra diversi livelli di sforzo - pensa come un detective dell'amore che scopre opportunità nascoste!
 
-TAG DISPONIBILI (pensa a questi come ingredienti per la magia):
+TAG DISPONIBILI:
 - people: il suo mondo sociale - famiglia, amici, colleghi che contano
 - dislikes: cose da evitare
 - gifts: tesori che potrebbero farla sorridere o commuovere
@@ -134,30 +135,35 @@ TAG DISPONIBILI (pensa a questi come ingredienti per la magia):
 - dates: avventure insieme - luoghi, esperienze, momenti da creare
 - food: tutto ciò che riguarda il cibo
 - history: il suo passato
-- general: idee generali
 
+LIVELLI DI SFORZO (IMPORTANTE):
+- EFFORT 1: Gesti semplici, immediati, che richiedono pochi minuti (es: mandare un messaggio, comprare qualcosa di piccolo, ricordare una preferenza)
+- EFFORT 2: Attività che richiedono pianificazione moderata o qualche ora (es: cucinare qualcosa di speciale, organizzare una serata, fare un piccolo regalo personalizzato)
+- EFFORT 3: Progetti più impegnativi che richiedono giorni di preparazione o budget significativo (es: viaggi, eventi elaborati, regali costosi)
 
-LA TUA MISSIONE CREATIVA:
-1. Ogni suggerimento deve essere un piccolo capolavoro di premura (max 200 caratteri)
-2. Scava nei dettagli nascosti - cosa rivela davvero questo fatto su di lei?
-3. Pensa a gesti che la sorprenderebbero perché mostri di aver davvero ascoltato
-4. Combina elementi inaspettati - mescola i tag in modi creativi!
-5. Trasforma i DISLIKES in azioni POSITIVE che prevengono il problema
-6. Assegna max 3 tag, scegliendo quelli che catturano l'essenza del gesto
+STRATEGIA DI BILANCIAMENTO:
+- Circa 40% dei suggerimenti dovrebbero essere EFFORT 1 (gesti quotidiani dolci)
+- Circa 40% dei suggerimenti dovrebbero essere EFFORT 2 (momenti speciali pianificati)
+- Circa 20% dei suggerimenti dovrebbero essere EFFORT 3 (grandi gesti memorabili)
 
-ESEMPI:
-- "Crea una playlist delle sue canzoni preferite per quando è stressata dal lavoro" (tags: ["activities", "people"])
-- "Porta sempre con te delle mentine, dato che odia l'alito cattivo" (tags: ["dislikes", "gifts"])
-- "Organizza una cena a tema del suo paese d'origine con i suoi genitori" (tags: ["food", "people", "history"])
+PRINCIPI GUIDA:
+1. NON combinare troppi fatti insieme - spesso un singolo fatto può generare un ottimo suggerimento
+2. Varia tra suggerimenti "diretti" (basati sui fatti) e "creativi" (ispirati dai fatti)
+3. Ogni suggerimento deve essere actionable e specifico (max 200 caratteri)
+4. Trasforma i DISLIKES in azioni POSITIVE che prevengono il problema
+5. Assegna max 3 tag che catturano l'essenza del gesto
+6. Assegna sempre un effort score da 1 a 3
 
-Non limitarti solo ai fatti inseriti! Usa questi come ISPIRAZIONE per:
-- Categorie simili (ama Studio Ghibli → potrebbe amare anime, Giappone, arte)  
-- Pattern nascosti (3 fatti su cucina → probabilmente ama cucinare insieme)
-- Connessioni creative (studia architettura + ama disegnare → museo design)
+ESEMPI CON EFFORT SCORE:
+- "Mandagli un messaggio dolce quando sai che ha una giornata difficile" (tags: ["people"], effort: 1)
+- "Prepara la sua colazione preferita nel weekend" (tags: ["food"], effort: 2)
+- "Organizza una sorpresa con tutti i suoi amici per il compleanno" (tags: ["people", "dates"], effort: 3)
+- "Tieni sempre delle mentine in borsa dato che odia l'alito cattivo" (tags: ["dislikes"], effort: 1)
 
-REGOLA D'ORO: Per ogni suggerimento "diretto" dai fatti, crea un suggerimento "creativo" che esce un po' dal seminato.
-
-Ricorda di essere anche realistico, non mischiare troppe cose tutte insieme altrimenti diventa difficile fare tutto, alterna cose più impegnative a cose più semplici ma rimanendo ragionevole.
+ESPLORA ANCHE OLTRE I FATTI:
+- Se ama qualcosa, pensa a categorie correlate
+- Se ha una passione, immagina modi creativi per supportarla
+- Se ha un background specifico, connettilo a esperienze nuove
 
 {self.output_parser.get_format_instructions()}
 """
@@ -185,16 +191,24 @@ Sii creativo, sii specifico, sii magico! 💫
             response = self.llm(messages)
             response_text = response.content.strip()
             
+            # Debug logging
+            print(f"DEBUG: Raw AI response: {response_text[:500]}...")
+            
             # Parse the structured response
             try:
                 parsed_response = self.output_parser.parse(response_text)
-                suggestions = [
-                    {
+                print(f"DEBUG: Parsed response has {len(parsed_response.suggestions)} suggestions")
+                suggestions = []
+                for i, suggestion in enumerate(parsed_response.suggestions):
+                    suggestion_dict = {
                         'sentence': suggestion.sentence,
-                        'tags': suggestion.tags
+                        'tags': suggestion.tags,
+                        'effort': suggestion.effort
                     }
-                    for suggestion in parsed_response.suggestions
-                ]
+                    suggestions.append(suggestion_dict)
+                    print(f"DEBUG: Suggestion {i+1}: effort={suggestion.effort}, tags={suggestion.tags}")
+                
+                print(f"DEBUG: Final suggestions array has {len(suggestions)} items")
                 
                 return {
                     'success': True,
