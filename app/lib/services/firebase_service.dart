@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -499,37 +500,77 @@ class FirebaseService {
   // Google Sign-In using Firebase Auth directly (like React)
   Future<User?> signInWithGoogle() async {
     try {
-      // Initialize GoogleSignIn
-      final GoogleSignIn googleSignIn = GoogleSignIn();
+      print('DEBUG: Starting Google Sign-In process...');
       
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      
-      // If the user cancels the sign-in process
-      if (googleUser == null) {
-        return null;
+      if (kIsWeb) {
+        // Use Firebase Auth directly for web to avoid People API dependency
+        print('DEBUG: Using Firebase Auth for web platform');
+        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        
+        // Add scopes if needed
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
+        
+        print('DEBUG: Triggering Firebase Auth popup...');
+        final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
+        
+        print('DEBUG: Firebase web sign-in successful: ${userCredential.user?.email}');
+        
+        // Always ensure user profile exists
+        if (userCredential.user != null) {
+          await _ensureUserProfile(userCredential.user!);
+        }
+        
+        return userCredential.user;
+      } else {
+        // Use GoogleSignIn package for mobile platforms
+        print('DEBUG: Using GoogleSignIn package for mobile platform');
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        print('DEBUG: GoogleSignIn initialized');
+        
+        // Trigger the authentication flow
+        print('DEBUG: Triggering Google Sign-In flow...');
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        
+        // If the user cancels the sign-in process
+        if (googleUser == null) {
+          print('DEBUG: User cancelled Google Sign-In');
+          return null;
+        }
+        
+        print('DEBUG: Google user obtained: ${googleUser.email}');
+        
+        // Obtain the auth details from the request
+        print('DEBUG: Getting authentication details...');
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        
+        print('DEBUG: Access token present: ${googleAuth.accessToken != null}');
+        print('DEBUG: ID token present: ${googleAuth.idToken != null}');
+        
+        // Create a new credential
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        
+        print('DEBUG: Firebase credential created, signing in...');
+        
+        // Sign in to Firebase with the Google credential
+        final UserCredential userCredential = await _auth.signInWithCredential(credential);
+        
+        print('DEBUG: Firebase sign-in successful: ${userCredential.user?.email}');
+        
+        // Always ensure user profile exists (for both new and existing users)
+        if (userCredential.user != null) {
+          await _ensureUserProfile(userCredential.user!);
+        }
+        
+        return userCredential.user;
       }
-      
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      // Create a new credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      
-      // Sign in to Firebase with the Google credential
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
-      
-      // Always ensure user profile exists (for both new and existing users)
-      if (userCredential.user != null) {
-        await _ensureUserProfile(userCredential.user!);
-      }
-      
-      return userCredential.user;
     } catch (e) {
-      print('Google sign in error: $e');
+      print('ERROR: Google sign in failed: $e');
+      print('ERROR: Exception type: ${e.runtimeType}');
+      print('ERROR: Stack trace: ${StackTrace.current}');
       return null;
     }
   }

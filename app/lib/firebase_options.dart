@@ -47,7 +47,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDLf0TY-FnVl9O9Uz6Pgmea-ZsTqWaxxsA',
+    apiKey: 'AIzaSyDGWY40Yw2fLnlEOACmxNMglOsikxjM5uw', // Using Android API key temporarily
     appId: '1:1032040868251:web:f145a1e6e7d382d053193e',
     messagingSenderId: '1032040868251',
     projectId: 'tracely-project',
@@ -56,7 +56,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDJItFPJVykGm8JLD2UNwRlaY04Kmgj5y4',
+    apiKey: 'AIzaSyDGqH-n10HiVm6dEXJibJhNBuA2VMnTYM0',
     appId: '1:1032040868251:android:ffe86bb5828fe82c53193e',
     messagingSenderId: '1032040868251',
     projectId: 'tracely-project',
