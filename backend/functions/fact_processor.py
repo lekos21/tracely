@@ -40,7 +40,6 @@ class FactProcessor:
         
         # Available tags (simplified from 7 main categories)
         self.available_tags = [
-        self.available_tags = [
             # "people" removed as requested
             "dislikes",    # cose che odia/evitare
             "gifts",       # tutto ciò che può diventare regalo
