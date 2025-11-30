@@ -208,6 +208,7 @@ class FirebaseService {
   Future<Map<String, dynamic>> generateRecommendations({
     List<String>? tags, // Optional list of tags to focus on
     int count = 5,
+    List<Map<String, dynamic>>? previousSuggestions, // Previous suggestions to avoid duplicates
   }) async {
     try {
       // Wait for authentication to be ready
@@ -225,6 +226,7 @@ class FirebaseService {
       final result = await callable.call({
         'tags': tags,
         'count': count,
+        'previous_suggestions': previousSuggestions ?? [],
       });
       
       print('DEBUG: generate_recommendations response: ${result.data}');

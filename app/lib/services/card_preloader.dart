@@ -7,10 +7,11 @@ class CardPreloader {
   CardPreloader._internal();
 
   List<InsightCard> _allCards = [];
+  List<Map<String, dynamic>> _allSuggestions = []; // Track all suggestions for duplicate prevention
   bool _isLoadingBatch = false;
   String? _errorMessage;
   int _currentBatch = 0;
-  static const int _batchSize = 8;
+  static const int _batchSize = 10; // Changed from 8 to 10
   bool _hasMoreCards = true;
 
   // Getters for the cards screen to use
@@ -42,14 +43,28 @@ class CardPreloader {
 
     try {
       final firebaseService = FirebaseService();
+      
+      // Get the last 40 suggestions to send as previous suggestions
+      final previousSuggestions = _allSuggestions.length > 40 
+          ? _allSuggestions.sublist(_allSuggestions.length - 40)
+          : _allSuggestions;
+      
       final result = await firebaseService.generateRecommendations(
         count: _batchSize,
+        previousSuggestions: previousSuggestions,
       );
 
       if (result['success']) {
         final List<dynamic> suggestions = result['suggestions'] ?? [];
         
         if (suggestions.isNotEmpty) {
+          // Store raw suggestions for duplicate prevention
+          for (final suggestion in suggestions) {
+            if (suggestion is Map<String, dynamic>) {
+              _allSuggestions.add(Map<String, dynamic>.from(suggestion));
+            }
+          }
+          
           final newCards = suggestions
               .map((suggestion) => InsightCard.fromRecommendation(suggestion))
               .toList();
@@ -63,6 +78,7 @@ class CardPreloader {
           }
           
           print('Batch ${_currentBatch} loaded: ${newCards.length} cards (Total: ${_allCards.length})');
+          print('Total suggestions tracked: ${_allSuggestions.length}');
         } else {
           if (_allCards.isEmpty) {
             _errorMessage = 'Add some facts about your partner to get personalized recommendations!';
@@ -88,6 +104,7 @@ class CardPreloader {
   // Clear all cards (useful for refresh)
   void clearAllCards() {
     _allCards.clear();
+    _allSuggestions.clear(); // Also clear tracked suggestions
     _errorMessage = null;
     _isLoadingBatch = false;
     _currentBatch = 0;

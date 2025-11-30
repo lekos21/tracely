@@ -15,6 +15,7 @@ load_dotenv()
 class FactModel(BaseModel):
     """Pydantic model for structured fact output"""
     fact: str = Field(description="Il fatto estratto in forma chiara e concisa")
+    category: str = Field(description="Categoria del fatto: 'partner_fact' (tratti, gusti, storia) o 'idea' (regali, date, progetti)", pattern="^(partner_fact|idea)$")
     tags: List[str] = Field(description="Lista di tag (massimo 3) che descrivono il fatto", max_items=3)
     sentiment: str = Field(description="Sentimento: positive, negative, o neutral")
 
@@ -39,7 +40,8 @@ class FactProcessor:
         
         # Available tags (simplified from 7 main categories)
         self.available_tags = [
-            "people",      # famiglia, amici, colleghi
+        self.available_tags = [
+            # "people" removed as requested
             "dislikes",    # cose che odia/evitare
             "gifts",       # tutto ciò che può diventare regalo
             "activities",  # hobby, interessi, cose che ama fare
@@ -55,7 +57,6 @@ Sei un assistente AI specializzato nell'analizzare informazioni su relazioni rom
 Il tuo compito è trasformare input dell'utente in "facts" strutturati. Questi input possono rappresentare un'idea romantica dell'utente, oppure una preferenza espressa dalla partner (e.g. "vorrei regalarle un ciondolo d'argento", "Le piace il cibo italiano").
 
 TAG DISPONIBILI (massimo 3 per fact):
-- people: famiglia, amici, colleghi
 - dislikes: cose che odia o da evitare
 - gifts: tutto ciò che può diventare regalo
 - activities: esperienze, luoghi speciali, attività da fare
@@ -64,26 +65,34 @@ TAG DISPONIBILI (massimo 3 per fact):
 - history: background, studi, passato
 - general: idee generali
 
+CATEGORIE:
+- partner_fact: Informazioni sulla persona (es. "Ama Sylvia Plath", "Odia il coriandolo", "Ha studiato a Pisa"). Riguarda CHI È lei.
+- idea: Idee generiche per regali o appuntamenti (es. "Weekend in Toscana", "Regalarle un corso di ceramica"). Riguarda COSA FARE.
+
 REGOLE:
 - Estrai il fatto in forma chiara e concisa
-- Scegli massimo 3 tag più rilevanti dalla lista
+- Determina la CATEGORIA corretta (partner_fact vs idea)
+- Scegli massimo 3 tag più rilevanti dalla lista (NON usare 'people')
 - Determina il sentiment: positive, negative, o neutral
-- Se l'input non contiene informazioni utili sulla partner, rispondi con "SKIP"
+- Se l'input non contiene informazioni utili sulla partner o idee, rispondi con "SKIP"
 
 ESEMPI:
 Input: "Appuntamento creare una tierlist insieme"
 Fact: "Creare una tierlist insieme"
+Category: "idea"
 Tags: ["dates", "activities"]
 Sentiment: "neutral"
 
 Input: "Ama i film di Studio Ghibli"
 Fact: "Ama i film di Studio Ghibli"
+Category: "partner_fact"
 Tags: ["activities", "gifts"]
 Sentiment: "positive"
 
 Input: "Ha litigato con Sara per il matrimonio"
 Fact: "Ha litigato con Sara per il matrimonio"
-Tags: ["people"]
+Category: "partner_fact"
+Tags: ["history"]
 Sentiment: "negative"
 
 {self.output_parser.get_format_instructions()}
@@ -127,6 +136,7 @@ Input da analizzare: {user_input}"""
                 # Convert to dict and add metadata
                 fact_data = {
                     "fact": fact_model.fact,
+                    "category": fact_model.category,
                     "tags": fact_model.tags[:3],  # Ensure max 3 tags
                     "sentiment": fact_model.sentiment,
                     "date": datetime.now().isoformat()
@@ -158,6 +168,7 @@ Input da analizzare: {user_input}"""
             # Optimized: Prepare minimal document structure
             fact_doc = {
                 "fact": fact_data["fact"],
+                "category": fact_data.get("category", "partner_fact"), # Default for backward compatibility
                 "tags": fact_data["tags"],
                 "sentiment": fact_data["sentiment"],
                 "created_at": firestore.SERVER_TIMESTAMP,
@@ -208,6 +219,7 @@ Input da analizzare: {user_input}"""
                     "type": "fact_saved",
                     "fact_data": {
                         "fact": fact_data["fact"],
+                        "category": fact_data.get("category", "partner_fact"),
                         "tags": fact_data["tags"],
                         "sentiment": fact_data["sentiment"]
                     }
@@ -290,7 +302,7 @@ Input da analizzare: {user_input}"""
             
         Returns:
             List of lists where each inner list contains facts grouped by highest priority tag
-            Order: [people, dislikes, gifts, activities, dates, food, history]
+            Order: [dislikes, gifts, activities, dates, food, history]
         """
         try:
             # Get all facts
@@ -298,7 +310,7 @@ Input da analizzare: {user_input}"""
             
             # Tag hierarchy (highest to lowest priority)
             tag_hierarchy = [
-                "people",      # famiglia, amici, colleghi (massima priorità)
+                # "people" removed
                 "dislikes",    # cose da evitare (alta priorità)
                 "gifts",       # idee regalo potenziali
                 "activities",  # hobby, interessi, cose che ama fare
@@ -350,7 +362,6 @@ Input da analizzare: {user_input}"""
             
             # Organize by tags
             facts_by_tag = {
-                'people': [],
                 'dislikes': [],
                 'gifts': [],
                 'activities': [],

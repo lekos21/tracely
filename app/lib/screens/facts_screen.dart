@@ -14,10 +14,11 @@ class _FactsScreenState extends State<FactsScreen> {
   List<Map<String, dynamic>> _filteredFacts = [];
   bool _isLoading = true;
   String? _errorMessage;
-  String? _selectedTagFilter;
+  String _selectedCategory = 'partner_fact'; // 'partner_fact' or 'idea'
   
   final List<String> _availableTags = [
-    'people', 'dislikes', 'gifts', 'activities', 'dates', 'food', 'history'
+    // 'people' removed
+    'dislikes', 'gifts', 'activities', 'dates', 'food', 'history'
   ];
 
   @override
@@ -44,7 +45,7 @@ class _FactsScreenState extends State<FactsScreen> {
         ).toList();
         setState(() {
           _facts = facts;
-          _filteredFacts = facts;
+          _filterFacts(); // Initial filter
           _isLoading = false;
         });
       } else {
@@ -62,23 +63,39 @@ class _FactsScreenState extends State<FactsScreen> {
     }
   }
 
+  void _filterFacts() {
+    setState(() {
+      _filteredFacts = _facts.where((fact) {
+        // Filter by category
+        final category = fact['category'] ?? 'partner_fact'; // Default to partner_fact
+        if (category != _selectedCategory) return false;
+        
+        // Filter by tag
+        if (_selectedTagFilter != null) {
+          final factTags = List<String>.from(fact['tags'] ?? []);
+          if (!factTags.contains(_selectedTagFilter)) return false;
+        }
+        
+        return true;
+      }).toList();
+    });
+  }
+
   void _filterByTag(String? tag) {
     setState(() {
-      // If clicking the same tag, deselect it and show all
       if (_selectedTagFilter == tag) {
         _selectedTagFilter = null;
-        _filteredFacts = _facts;
       } else {
         _selectedTagFilter = tag;
-        if (tag == null) {
-          _filteredFacts = _facts;
-        } else {
-          _filteredFacts = _facts.where((fact) {
-            final factTags = List<String>.from(fact['tags'] ?? []);
-            return factTags.contains(tag);
-          }).toList();
-        }
       }
+      _filterFacts();
+    });
+  }
+
+  void _selectCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+      _filterFacts();
     });
   }
   
@@ -294,7 +311,8 @@ class _FactsScreenState extends State<FactsScreen> {
     // Optimistic update - immediately remove from UI
     setState(() {
       _facts.removeWhere((fact) => fact['id'] == factId);
-      _filterByTag(_selectedTagFilter); // Reapply current filter
+      _facts.removeWhere((fact) => fact['id'] == factId);
+      _filterFacts(); // Reapply filters
     });
 
     // Show immediate success feedback
@@ -317,7 +335,7 @@ class _FactsScreenState extends State<FactsScreen> {
         // Revert optimistic update on failure
         setState(() {
           _facts.insert(originalIndex, factToDelete);
-          _filterByTag(_selectedTagFilter);
+          _filterFacts();
         });
         
         if (mounted) {
@@ -334,7 +352,7 @@ class _FactsScreenState extends State<FactsScreen> {
       // Revert optimistic update on error
       setState(() {
         _facts.insert(originalIndex, factToDelete);
-        _filterByTag(_selectedTagFilter);
+        _filterFacts();
       });
       
       if (mounted) {
@@ -569,7 +587,7 @@ class _FactsScreenState extends State<FactsScreen> {
       setState(() {
         _facts[factIndex]['fact'] = result['text'];
         _facts[factIndex]['tags'] = result['tags'];
-        _filterByTag(_selectedTagFilter);
+        _filterFacts();
       });
 
       // Show immediate success feedback
@@ -596,7 +614,7 @@ class _FactsScreenState extends State<FactsScreen> {
           // Revert on failure
           setState(() {
             _facts[factIndex] = originalFact;
-            _filterByTag(_selectedTagFilter);
+            _filterFacts();
           });
           
           if (mounted) {
@@ -613,7 +631,7 @@ class _FactsScreenState extends State<FactsScreen> {
         // Revert on error
         setState(() {
           _facts[factIndex] = originalFact;
-          _filterByTag(_selectedTagFilter);
+          _filterFacts();
         });
         
         if (mounted) {
@@ -642,8 +660,7 @@ class _FactsScreenState extends State<FactsScreen> {
 
   Color _getTagColor(String tag) {
     switch (tag) {
-      case 'people':
-        return Colors.blue;
+      // 'people' removed
       case 'dislikes':
         return Colors.red;
       case 'gifts':
@@ -710,9 +727,97 @@ class _FactsScreenState extends State<FactsScreen> {
         child: SafeArea(
           child: Column(
             children: [
+              // Category Tabs
+              Container(
+                margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(200),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _selectCategory('partner_fact'),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedCategory == 'partner_fact'
+                                ? Colors.white
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: _selectedCategory == 'partner_fact'
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Text(
+                            'Partner Profile',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: _selectedCategory == 'partner_fact'
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: _selectedCategory == 'partner_fact'
+                                  ? const Color(0xFF2A2A2A)
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _selectCategory('idea'),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedCategory == 'idea'
+                                ? Colors.white
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: _selectedCategory == 'idea'
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Text(
+                            'Saved Ideas',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: _selectedCategory == 'idea'
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: _selectedCategory == 'idea'
+                                  ? const Color(0xFF2A2A2A)
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
               // Tag filter chips
               Container(
-                margin: const EdgeInsets.only(left: 20, right: 20, top: 16),
+                margin: const EdgeInsets.only(left: 20, right: 20, top: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.white.withAlpha(230),

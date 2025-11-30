@@ -33,7 +33,7 @@ class ChatAgent:
         
         # Available tags (same as other agents)
         self.available_tags = [
-            "people",      # famiglia, amici, colleghi
+            # "people" removed
             "dislikes",    # cose che odia/evitare
             "gifts",       # tutto ciò che può diventare regalo
             "activities",  # hobby, interessi, cose che ama fare

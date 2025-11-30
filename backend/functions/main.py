@@ -271,7 +271,7 @@ def get_user_facts_by_hierarchy(req):
         facts_hierarchy = get_fact_processor().get_all_user_facts_by_hierarchy(user_id, limit)
         
         # Tag names for reference
-        tag_names = ['people', 'dislikes', 'gifts', 'activities', 'dates', 'food', 'history']
+        tag_names = ['dislikes', 'gifts', 'activities', 'dates', 'food', 'history']
         
         # Count facts in each hierarchy level
         hierarchy_counts = [len(facts) for facts in facts_hierarchy]
@@ -308,15 +308,17 @@ def generate_recommendations(req):
             }
             
         selected_tags = req.data.get('selected_tags', None)
-        count_raw = req.data.get('count', 8)
+        count_raw = req.data.get('count', 10)  # Changed default from 8 to 10
+        previous_suggestions = req.data.get('previous_suggestions', [])  # New parameter
         
         # Handle protobuf Int64Value format from Firebase Callable
         if isinstance(count_raw, dict) and '@type' in count_raw:
-            count = int(count_raw.get('value', 8))
+            count = int(count_raw.get('value', 10))
         else:
-            count = int(count_raw) if count_raw else 8
+            count = int(count_raw) if count_raw else 10
             
         print(f"DEBUG: generate_recommendations - selected_tags: {selected_tags}, count: {count} (raw: {count_raw})")
+        print(f"DEBUG: generate_recommendations - previous_suggestions count: {len(previous_suggestions)}")
         
         # Get facts organized by tags first to check if user has any facts
         limit = 50  # Define limit variable that was missing
@@ -326,7 +328,8 @@ def generate_recommendations(req):
         result = get_recommendation_agent().generate_recommendations(
             user_id=user_id,
             selected_tags=selected_tags,
-            count=count
+            count=count,
+            previous_suggestions=previous_suggestions  # Pass previous suggestions
         )
         
         print(f"DEBUG: generate_recommendations - result success: {result.get('success', False)}")
@@ -402,7 +405,7 @@ def update_fact(req):
         # If manual tags are provided, use them; otherwise use AI processing
         if manual_tags is not None:
             # Validate manual tags against available tags
-            available_tags = ["people", "dislikes", "gifts", "activities", "dates", "food", "history"]
+            available_tags = ["dislikes", "gifts", "activities", "dates", "food", "history"]
             validated_tags = [tag for tag in manual_tags if tag in available_tags]
             
             # Still process with AI to get sentiment, but use manual tags
@@ -674,7 +677,7 @@ def chat_with_context(req):
         
         # Format facts for prompt
         formatted_facts = []
-        available_tags = ["people", "dislikes", "gifts", "activities", "dates", "food", "history"]
+        available_tags = ["dislikes", "gifts", "activities", "dates", "food", "history"]
         
         for tag in available_tags:
             if tag in facts_by_tag and facts_by_tag[tag]:

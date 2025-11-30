@@ -4,7 +4,7 @@ import '../screens/home_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/cards_screen.dart';
 import '../screens/facts_screen.dart';
-import '../services/firebase_service.dart';
+import '../screens/profile_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -64,8 +64,15 @@ class _MainNavigationState extends State<MainNavigation> {
                 ),
                 actions: [
                   // Enhanced profile button with gradient chip
-                  PopupMenuButton<String>(
-                    tooltip: 'Account',
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfileScreen(),
+                        ),
+                      );
+                    },
                     child: Container(
                       margin: const EdgeInsets.only(right: 12),
                       padding: const EdgeInsets.all(2),
@@ -96,23 +103,6 @@ class _MainNavigationState extends State<MainNavigation> {
                         ),
                       ),
                     ),
-                    onSelected: (value) async {
-                      if (value == 'logout') {
-                        await FirebaseService().signOut();
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout),
-                            SizedBox(width: 8),
-                            Text('Logout'),
-                          ],
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -145,30 +135,30 @@ class _MainNavigationState extends State<MainNavigation> {
         ),
         child: SafeArea(
           child: Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            height: 48, // Reduced from 64 to 48
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4), // Reduced vertical padding
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildNavItem(
                   icon: Icons.home_outlined,
-                  activeIcon: Icons.home_rounded,
+                  activeIcon: Icons.home,
                   index: 0,
                 ),
                 _buildNavItem(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  activeIcon: Icons.chat_bubble_rounded,
+                  icon: Icons.chat_outlined,
+                  activeIcon: Icons.chat,
                   index: 1,
                 ),
                 _buildNavItem(
-                  icon: Icons.style_outlined,
-                  activeIcon: Icons.style_rounded,
+                  icon: Icons.lightbulb_outline,
+                  activeIcon: Icons.lightbulb,
                   index: 2,
                 ),
                 _buildNavItem(
-                  icon: Icons.bookmark_outline_rounded,
-                  activeIcon: Icons.bookmark_rounded,
+                  icon: Icons.bookmark_outline,
+                  activeIcon: Icons.bookmark,
                   index: 3,
                 ),
               ],
@@ -186,11 +176,6 @@ class _MainNavigationState extends State<MainNavigation> {
   }) {
     final bool isSelected = _currentIndex == index;
     
-    // Use the same gradient as the header icon (pink to orange)
-    const gradient = LinearGradient(
-      colors: [Color(0xFFF472B6), Color(0xFFFB923C)], // pink-400 to orange-400
-    );
-    
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -200,26 +185,27 @@ class _MainNavigationState extends State<MainNavigation> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: isSelected ? gradient : null,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: const Color(0xFFF472B6).withAlpha(77),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ] : null,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child: Icon(
-            isSelected ? activeIcon : icon,
-            key: ValueKey(isSelected),
-            color: isSelected ? Colors.white : const Color(0xFF6B7280),
-            size: 24,
-          ),
+          child: isSelected 
+            ? ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFFF472B6), Color(0xFFFB923C)], // pink to orange gradient
+                ).createShader(bounds),
+                child: Icon(
+                  activeIcon,
+                  key: ValueKey(isSelected),
+                  color: Colors.white,
+                  size: 26,
+                ),
+              )
+            : Icon(
+                icon,
+                key: ValueKey(isSelected),
+                color: const Color(0xFF6B7280), // Gray when not selected
+                size: 26,
+              ),
         ),
       ),
     );

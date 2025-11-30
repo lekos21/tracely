@@ -43,7 +43,7 @@ class RecommendationAgent:
         
         # Available tags
         self.available_tags = [
-            "people",      # famiglia, amici, colleghi
+            # "people" removed
             "dislikes",    # cose che odia/evitare
             "gifts",       # tutto ciò che può diventare regalo
             "activities",  # hobby, interessi, cose che ama fare
@@ -78,14 +78,15 @@ class RecommendationAgent:
         
         return "\n".join(formatted_facts) if formatted_facts else "Nessun fatto disponibile per i tag selezionati."
 
-    def generate_recommendations(self, user_id: str, selected_tags: Optional[List[str]] = None, count: int = 8) -> Dict[str, Any]:
+    def generate_recommendations(self, user_id: str, selected_tags: Optional[List[str]] = None, count: int = 10, previous_suggestions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Generate N personalized recommendations based on user facts and selected tags
         
         Args:
             user_id: User ID to generate recommendations for
             selected_tags: List of tags to focus on (if None, use all tags)
-            count: Number of suggestions to generate (default 5)
+            count: Number of suggestions to generate (default 10)
+            previous_suggestions: List of previous suggestions to avoid duplicates
             
         Returns:
             Dictionary with success status and generated suggestions
@@ -120,15 +121,26 @@ class RecommendationAgent:
             # Format facts for prompt
             formatted_facts = self._format_facts_for_prompt(facts_by_tag, selected_tags)
             
+            # Format previous suggestions to avoid duplicates
+            previous_suggestions_text = ""
+            if previous_suggestions and len(previous_suggestions) > 0:
+                # Take only the last 40 suggestions as specified
+                recent_suggestions = previous_suggestions[-40:] if len(previous_suggestions) > 40 else previous_suggestions
+                previous_suggestions_text = f"""
+SUGGERIMENTI PRECEDENTI DA EVITARE (ultimi {len(recent_suggestions)}):
+{chr(10).join([f"- {suggestion.get('sentence', '')}" for suggestion in recent_suggestions])}
+
+IMPORTANTE: Non ripetere o creare variazioni troppo simili ai suggerimenti sopra. Sii creativo e trova nuovi angoli!
+"""
+            
             # Create system prompt for recommendation generation
             system_prompt = f"""
 Sei un assistente AI creativo e intuitivo, specializzato nel trasformare piccoli dettagli in gesti d'amore memorabili.
 Il tuo superpotere è leggere tra le righe dei fatti e immaginare modi sorprendenti per far sentire speciale la persona amata.
 
-Crea {count} suggerimenti bilanciati tra diversi livelli di sforzo - pensa come un detective dell'amore che scopre opportunità nascoste!
+Crea {count} suggerimenti bilanciati tra diversi livelli di sforzo
 
 TAG DISPONIBILI:
-- people: il suo mondo sociale - famiglia, amici, colleghi che contano
 - dislikes: cose da evitare
 - gifts: tesori che potrebbero farla sorridere o commuovere
 - activities: passioni, hobby
@@ -149,15 +161,14 @@ STRATEGIA DI BILANCIAMENTO:
 PRINCIPI GUIDA:
 1. NON combinare troppi fatti insieme - spesso un singolo fatto può generare un ottimo suggerimento
 2. Varia tra suggerimenti "diretti" (basati sui fatti) e "creativi" (ispirati dai fatti)
-3. Ogni suggerimento deve essere actionable e specifico (max 200 caratteri)
-4. Trasforma i DISLIKES in azioni POSITIVE che prevengono il problema
-5. Assegna max 3 tag che catturano l'essenza del gesto
-6. Assegna sempre un effort score da 1 a 3
+3. Ogni suggerimento deve essere actionable e specifico (max 300 caratteri)
+4. Assegna max 3 tag che catturano l'essenza del gesto
+5. Assegna sempre un effort score da 1 a 3
 
 ESEMPI CON EFFORT SCORE:
-- "Mandagli un messaggio dolce quando sai che ha una giornata difficile" (tags: ["people"], effort: 1)
+- "Mandagli un messaggio dolce quando sai che ha una giornata difficile" (tags: ["activities"], effort: 1)
 - "Prepara la sua colazione preferita nel weekend" (tags: ["food"], effort: 2)
-- "Organizza una sorpresa con tutti i suoi amici per il compleanno" (tags: ["people", "dates"], effort: 3)
+- "Organizza una sorpresa con tutti i suoi amici per il compleanno" (tags: ["dates"], effort: 3)
 - "Tieni sempre delle mentine in borsa dato che odia l'alito cattivo" (tags: ["dislikes"], effort: 1)
 
 ESPLORA ANCHE OLTRE I FATTI:
@@ -175,10 +186,12 @@ ESPLORA ANCHE OLTRE I FATTI:
 
 ✨ FOCUS: {', '.join(selected_tags)}
 
-Ora è il momento di brillare! Analizza questi indizi come un detective dell'amore e crea {count} suggerimenti che la faranno sentire davvero vista e amata. 
+{previous_suggestions_text}
+
+Analizza questi indizi come un detective dell'amore e crea {count} suggerimenti che la faranno sentire davvero vista e amata. 
 Pensa a gesti che nessun altro farebbe perché solo tu conosci questi dettagli su di lei.
 
-Sii creativo, sii specifico, sii magico! 💫
+
 """
             
             # Create messages for the LLM
